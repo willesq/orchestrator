@@ -230,9 +230,8 @@ public struct SourceList: Sendable, Equatable {
 /// Searching, listing and browsing durable memory.
 public protocol MemoryAPI: Sendable {
     func search(_ query: SearchQuery) async throws -> SearchResult
-    /// Stored sources of one type ("" for any), in `collections` (empty for
-    /// every readable one).
-    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList
+    /// The stored sources `query` matches, with totals before its limit.
+    func listSources(_ query: SourcesQuery) async throws -> SourceList
     /// The collections the app may read, and whether spaces are on.
     func listCollections() async throws -> CollectionList
     /// One page of every chunk matching `query`, unranked; `cursor` is the
@@ -241,6 +240,12 @@ public protocol MemoryAPI: Sendable {
 }
 
 extension MemoryAPI {
+    /// Stored sources of one type ("" for any), in `collections` (empty for
+    /// every readable one).
+    public func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList {
+        try await listSources(SourcesQuery(sourceType: type, collections: collections, limit: limit))
+    }
+
     /// Sources across every readable collection.
     public func listSources(type: String, limit: Int) async throws -> SourceList {
         try await listSources(type: type, limit: limit, collections: [])

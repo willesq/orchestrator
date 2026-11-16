@@ -3,27 +3,30 @@ import SwiftUI
 
 /// The Memory pane's Direct messages tab (SP-083): the operator's search of
 /// chat, direct messages included, through orchd's SearchDirectMessages.
-/// Each result names the tenant and space orchd stored it under. While
-/// screen-share-safe mode is on it shows no direct message and runs no
-/// search; a refused or failed search says why.
+/// It has the Search tab's filters (typed `key:value` filters, Collection,
+/// Type, Match, page size and relevance) over one batch of up to 100, and a
+/// result's every field in the inspector. Each result names the tenant and
+/// space orchd stored it under. While screen-share-safe mode is on it shows
+/// no direct message and runs no search; a refused or failed search says why.
 struct DirectMessageSearchView: View {
     @Bindable var model: DirectMessageSearchModel
+    var collections: CollectionsModel?
+    /// The source types for the Type menu.
+    var types: [String] = []
+
+    @State private var selection: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                TextField("Search chat and direct messages", text: $model.query.text)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { Task { await model.search() } }
-                Picker("Show", selection: $model.query.limit) {
-                    ForEach(SearchQuery.limitChoices, id: \.self) { Text("\($0) results").tag($0) }
-                }
-                .labelsHidden()
-                .fixedSize()
-                .controlSize(.small)
-                Button("Search") { Task { await model.search() } }
-                    .keyboardShortcut(.defaultAction)
-            }
+            MemoryFilterBar(
+                text: $model.query.text, prompt: "Search chat and direct messages, e.g. release since:7d",
+                submitTitle: "Search", submit: { Task { await model.search() } }, collections: collections,
+                collection: $model.query.collections.single, sourceType: $model.query.sourceType,
+                types: typeChoices(known: types, current: DirectMessageSearchModel.chatSourceType),
+                mode: $model.query.mode, pageSize: $model.query.limit, pageSizes: SearchQuery.limitChoices,
+                minRelevance: $model.minRelevance, chips: model.parsed.chips, notes: model.parsed.notes,
+                remove: { chip in Task { await model.remove(chip) } }, syntaxHelp: MemoryFilterSyntax.directMessages
+            )
             .padding(12)
             .disabled(model.failure == .sharing)
             Text("Only Orch.app can run this search. Agents, tasks and terminals never see direct messages.")
@@ -41,6 +44,7 @@ struct DirectMessageSearchView: View {
         .onChange(of: model.failure == .sharing, initial: true) { _, sharing in
             if sharing { model.clear() }
         }
+        .onChange(of: model.answered) { selection = nil }
     }
 
     @ViewBuilder private var results: some View {
@@ -53,14 +57,46 @@ struct DirectMessageSearchView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.hasSearched && model.hits.isEmpty {
             EmptyState(symbol: "magnifyingglass", title: "No results",
-                       message: "No chat message matches. Try other words.")
+                       message: "No chat message matches. Try other words, fewer filters, or any type.")
         } else if model.hasSearched {
-            List(model.hits) { hit in DirectMessageRow(hit: hit) }
+            let hits = model.visibleHits
+            AdaptiveSplit(primaryWidth: .init(min: 300, ideal: 460), secondaryWidth: .init(min: 300, ideal: 380, max: 640),
+                          stacking: .detail(shown: selection != nil, backTitle: "Results", back: { selection = nil }),
+                          secondaryPresent: selection != nil) {
+                List(selection: $selection) {
+                    ForEach(Array(hits.enumerated()), id: \.offset) { index, hit in DirectMessageRow(hit: hit).tag(index) }
+                    footer
+                }
+            } secondary: {
+                if let selection, hits.indices.contains(selection) {
+                    // Other reads leave direct messages out, so the only
+                    // narrowing offered is this search's own.
+                    HitInspector(hit: hits[selection].detail,
+                                 actions: HitActions(searchWithin: { uri in Task { await model.within(source: uri) } }),
+                                 sensitive: true)
+                }
+            }
         } else {
             EmptyState(symbol: "bubble.left.and.bubble.right", title: "Search direct messages",
                        message: "Chat channels and direct messages from your connected workspaces, with the tenant and space each came from.")
                 .frame(maxWidth: 520)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// "Showing 20 of 100", with Show more while the batch has more.
+    @ViewBuilder private var footer: some View {
+        if let text = model.footer {
+            VStack(alignment: .leading, spacing: 6) {
+                if model.canShowMore {
+                    Button("Show \(min(model.pageSize, model.matchingHits.count - model.visibleHits.count)) more") {
+                        model.showMore()
+                    }
+                }
+                Text(verbatim: text).textStyle(.caption).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 6)
+            .selectionDisabled()
         }
     }
 }

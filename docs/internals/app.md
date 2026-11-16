@@ -631,12 +631,24 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
 - **Memory:** a Search/Browse/Indexed/Direct messages switch in the toolbar. Browse, the
   collection list and the whole-source reader are FeatureStore models (`MemoryFeature.swift`)
   handed to the window through the environment, like Direct messages.
-  - **Filter bar** (`MemoryFilterBar`, shared by Search and Browse): the field, then labelled
-    menus: **Collection** (`ListCollections`, loaded once: "All collections" and each collection
-    with its chunk count, its space first with spaces on; with spaces off the one collection is
-    named with "Spaces are off: one collection" instead of a menu), **Type** (the types the
-    Indexed listing has seen), **Match** (Search only), the page size, and **Relevance** (Search
-    only). Typed `key:value` filters (`MemoryFilterParser`: `type:`, `repo:` as the tag
+  - **Filter bar** (`MemoryFilterBar`, shared by all four tabs so each has the same controls in
+    the same place): the field, then labelled menus: **Collection** (`CollectionPicker` over
+    `ListCollections`, loaded once: always a menu of "All collections" and each collection with its
+    chunk count, its space first with spaces on; with spaces off the menu stays and a caption says
+    "Spaces are off: one collection"; a list that failed to load shows a warning icon), **Type**
+    (the types the Indexed listing has seen), **Match** and **Relevance** (Search and Direct
+    messages, which rank), and the page size (**Show**, **Page** in Browse, **Limit** in Indexed).
+    The `?` help (`MemoryFilterSyntax`) lists the keys and what words and `uri:` mean on that tab.
+    Every tab takes every typed key:
+
+    | Tab | Words | `uri:` | `tag:`/`repo:` | Sent as |
+    |---|---|---|---|---|
+    | Search | searched, ranked | one source | `all_tags` | `SearchRequest` |
+    | Browse | ignored, with a note | one source | `all_tags` | `BrowseChunksRequest` |
+    | Indexed | ignored, with a note | address prefix (`uri_prefix`) | `all_tags` | `ListSourcesRequest` |
+    | Direct messages | searched, ranked | one conversation | `all_tags` | `SearchDirectMessagesRequest.search` |
+
+    Typed `key:value` filters (`MemoryFilterParser`: `type:`, `repo:` as the tag
     `repo:<x>`, `tag:`, `collection:`, `uri:`, `scope:`, `since:`/`until:` with ages `24h`/`7d`/`2w`,
     `today`, `yesterday`, ISO dates, `until` a day's end) become removable chips; a typed type,
     source or collection replaces the menu's, tags add to it, and several typed tags must all match (`all_tags`). Unknown
@@ -674,18 +686,28 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
   next page with the cursor until orchd returns an empty one ("All N shown"). A new listing bumps a
   generation, so a page of an older listing that answers late is dropped rather than appended.
   Words in the field are ignored with a note. Like search, it never returns chat direct messages.
-- **Memory → Indexed:** `ListSources`, every source in memory, up to 200 at a time with totals,
-  filtered by type and collection. Listing walks the store, so it has a 30 s deadline (about 6 s
-  for 60k chunks).
+- **Memory → Indexed:** `ListSources` (`SourcesModel` over `SourcesQuery`), the sources the
+  filters match with totals: type, collection, scope, an address prefix, tags, and since/until.
+  **Limit** offers 50, 200 (the default), 1000 or **All** (`limit` 0, no cap); the line above the
+  table reads "N of M sources · K chunks", or "All M sources" when nothing was cut off. The menus
+  list again at once; the field applies on **List**. Selecting a source shows **Open whole
+  source**, **Browse this source** (Browse with its `uri:` filter) and **Search within this
+  source** in a bar under the table and in the row's context menu. Listing walks the store, so it
+  has a 30 s deadline (about 6 s for 60k chunks). `MemoryAPI.listSources(_:)` takes the query;
+  `listSources(type:limit:collections:)` and `listSources(type:limit:)` remain for other callers.
 - **Limits:** a ranked search stops at 100 hits; Browse reaches every match but is unranked. The
   app is the operator, so it reads every collection; it does not show which spaces an agent may
   read.
 - **Memory tests:** `MemoryFilterParserTests` (table-driven), `SearchHitDetailTests`,
   `SearchModelTests` (paging without asking again, relevance, chips), `BrowseModelTests` (paging
-  to the end, stale pages, errors), `CollectionsModelTests`, `SourceDocumentModelTests`, and
-  `MemoryClientTests` over a fake orchd (`FakeMemoryBrowseService` serves `ListCollections` and a
-  paged `BrowseChunks`). Snapshots: `memory-filter-bar-spaces-{on,off}-{light,dark}.png`,
-  `memory-inspector-{light,dark}.png`, `memory-search-results-{light,dark}.png` (`MemorySnapshots`).
+  to the end, stale pages, errors), `CollectionsModelTests`, `SourceDocumentModelTests`,
+  `SourcesModelTests` (typed filters, the All limit, the count line), and `MemoryClientTests` over
+  a fake orchd (`FakeMemoryBrowseService` serves `ListCollections` and a paged `BrowseChunks`;
+  every `ListSourcesRequest` field is checked). Snapshots:
+  `memory-filter-bar-spaces-{on,off}-{light,dark}.png`,
+  `memory-collection-picker-{spaces-on,spaces-off,unavailable}-{light,dark}.png`,
+  `memory-inspector-{light,dark}.png`, `memory-search-results-{light,dark}.png`,
+  `memory-browse-{light,dark}.png` and `memory-indexed-{light,dark}.png` (`MemorySnapshots`).
 - **Memory → Direct messages (SP-083, D-81):** the operator's search of chat, direct messages
   included, through `SearchDirectMessages` with source type `chat`, the only read that returns
   DMs. orchd allows it only for the operator, which under a policy is Orch.app alone (D-71); with
@@ -695,6 +717,19 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
   (`DirectMessages`, `DaemonClient+DirectMessages` in OrchKit; `DirectMessagesFeature`,
   `DirectMessageSearchView` in the app, wired as described in [Adding a feature](#adding-a-feature)
   and handed to the window through the SwiftUI environment.)
+  - **Filters:** the shared filter bar, as in Search: typed filters and chips, Collection, Type
+    (starts at `chat`; **Any type** adds the rest of memory, still with DMs kept in), Match, Show
+    and Relevance. Like Search it asks once for a batch of 100 and reveals it a page at a time
+    (**Show N more**, "Showing 20 of 100"); text with filters but no words is not sent.
+    `DaemonClient.searchDirectMessages` sends every `SearchQuery` field through the same
+    `searchRequest` mapping as Search.
+  - **Inspector:** selecting a row opens the same `HitInspector` as Search, from
+    `DirectMessageHit.detail` (every field orchd sent, made display-safe, so tenant and space show
+    too). Its only narrowing action is **Search within**, which sets this tab's `uri:` filter:
+    every other read leaves DMs out, so Open whole source and Browse are not offered. It runs with
+    `sensitive`: **Copy as JSON** keeps the copy on this Mac (`.currentHostOnly`, so not on
+    Universal Clipboard) and marks it concealed and transient for clipboard managers, and a web
+    address gets no Open button, so it never lands in a browser's history.
   - **Results:** each hit shows its tenant (`slack:T…`, `teams:…`) and space as chips, its date,
     score, address and text. Both come from the stored chunk (`SearchHit.tenant`, `SearchHit.space`),
     not from where the tenant would be placed now; content stored with spaces off or before a

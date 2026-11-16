@@ -23,7 +23,20 @@ extension DaemonClient: DirectMessagesAPI {
         DirectMessageHit(
             index: index, text: displaySafeLines(h.text), sourceURI: displaySafe(h.sourceUri),
             tenant: displaySafe(h.tenant), space: displaySafe(h.space), score: h.score,
-            startedAt: date(fromUnix: h.startedAt)
+            startedAt: date(fromUnix: h.startedAt), detail: displaySafeHit(hit(h))
+        )
+    }
+
+    /// Every field of a chat hit made safe to display, for the inspector
+    /// and Copy as JSON.
+    static func displaySafeHit(_ h: SearchHit) -> SearchHit {
+        SearchHit(
+            text: displaySafeLines(h.text), sourceURI: displaySafe(h.sourceURI), sourceType: displaySafe(h.sourceType),
+            scope: displaySafe(h.scope), score: h.score, keywordScore: h.keywordScore, exact: h.exact,
+            tags: h.tags.map { displaySafe($0) }, startedAt: h.startedAt, endedAt: h.endedAt, ingestedAt: h.ingestedAt,
+            heading: displaySafe(h.heading), trust: displaySafe(h.trust), space: displaySafe(h.space),
+            tenant: displaySafe(h.tenant), collection: displaySafe(h.collection), pointID: displaySafe(h.pointID),
+            chunkIndex: h.chunkIndex
         )
     }
 }

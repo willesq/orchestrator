@@ -157,53 +157,24 @@ public final class SearchModel {
     /// what the relevance floor hides.
     public var footer: String? {
         guard paged, let result, !result.hits.isEmpty else { return nil }
-        var out = "Showing \(visibleHits.count) of \(matchingHits.count)"
-        if result.hits.count >= SearchQuery.maxResults {
-            out += " — ranked search returns at most \(SearchQuery.maxResults); use Browse to see every match"
-        }
-        if hiddenByRelevance > 0 {
-            out += " · \(hiddenByRelevance) below relevance \(String(format: "%.1f", minRelevance)) hidden"
-        }
-        return out
+        return rankedBatchFooter(visible: visibleHits.count, matching: matchingHits.count, batch: result.hits.count,
+                                 minRelevance: minRelevance, browseHint: true)
     }
 }
 
-/// Drives the Memory sources list.
-@MainActor
-@Observable
-public final class SourcesModel {
-    public static let pageSize = 200
-
-    public var typeFilter = ""
-    /// Only these collections; empty lists every readable one.
-    public var collections: [String] = []
-    public private(set) var list: SourceList?
-    public private(set) var lastError: String?
-
-    private let api: any MemoryAPI
-
-    public init(api: any MemoryAPI) {
-        self.api = api
+/// "Showing 20 of 100" for one ranked batch shown a page at a time, saying
+/// when the batch hit orchd's cap and what the relevance floor hides.
+func rankedBatchFooter(visible: Int, matching: Int, batch: Int, minRelevance: Float, browseHint: Bool = false) -> String {
+    var out = "Showing \(visible) of \(matching)"
+    if batch >= SearchQuery.maxResults {
+        out += " — ranked search returns at most \(SearchQuery.maxResults)"
+        if browseHint { out += "; use Browse to see every match" } else { out += "; add words or filters to narrow it" }
     }
-
-    public func refresh() async {
-        do {
-            let fresh = try await api.listSources(type: typeFilter.trimmingCharacters(in: .whitespaces), limit: Self.pageSize,
-                                                  collections: collections)
-            list = fresh
-            seenTypes.formUnion(fresh.sources.map(\.sourceType).filter { !$0.isEmpty })
-            lastError = nil
-        } catch {
-            lastError = DaemonMonitor.describe(error)
-        }
+    let hidden = batch - matching
+    if hidden > 0 {
+        out += " · \(hidden) below relevance \(String(format: "%.1f", minRelevance)) hidden"
     }
-
-    /// Every source type seen in any listing, so filtering to one type keeps
-    /// the others in the menu.
-    private var seenTypes: Set<String> = []
-
-    /// Source types seen so far, for the filter menus.
-    public var knownTypes: [String] { seenTypes.sorted() }
+    return out
 }
 
 /// Restarts subsystems from the dashboard and reports what happened.

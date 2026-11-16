@@ -28,7 +28,7 @@ private final class FakeMemory: MemoryAPI, @unchecked Sendable {
     var failSearch = false
     var failSources = false
     private(set) var queries: [SearchQuery] = []
-    private(set) var sourceRequests: [(String, Int, [String])] = []
+    private(set) var sourceRequests: [SourcesQuery] = []
     /// The hits each search answers with; one per query by default.
     var hits: [SearchHit]?
 
@@ -39,8 +39,8 @@ private final class FakeMemory: MemoryAPI, @unchecked Sendable {
         return SearchResult(hits: hits ?? [SearchHit(text: "about \(query.text)", sourceURI: "repo://\(query.text)")])
     }
 
-    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList {
-        lock.withLock { sourceRequests.append((type, limit, collections)) }
+    func listSources(_ query: SourcesQuery) async throws -> SourceList {
+        lock.withLock { sourceRequests.append(query) }
         if failSources { throw Boom() }
         return SourceList(sources: [
             SourceSummary(uri: "repo://a", sourceType: "repo_doc"),
@@ -210,10 +210,77 @@ private final class FakeMemory: MemoryAPI, @unchecked Sendable {
         model.typeFilter = " repo_doc "
         await model.refresh()
         #expect(model.list?.totalSources == 4)
-        #expect(api.sourceRequests.first?.0 == "repo_doc")
-        #expect(api.sourceRequests.first?.1 == SourcesModel.pageSize)
-        #expect(api.sourceRequests.first?.2 == [])
+        #expect(api.sourceRequests.first?.sourceType == "repo_doc")
+        #expect(api.sourceRequests.first?.limit == SourcesModel.pageSize)
+        #expect(api.sourceRequests.first?.collections == [])
         #expect(model.knownTypes == ["repo_doc", "session_transcript"])
+    }
+
+    @Test func typedFiltersReachTheListing() async throws {
+        let api = FakeMemory()
+        let model = SourcesModel(api: api)
+        model.typeFilter = "web"
+        model.collections = ["base"]
+        model.filterText = "type:repo_doc scope:o/r uri:session:// collection:orch-work tag:owner:x repo:revok "
+            + "since:2026-01-01 until:2026-01-02 stray words"
+        await model.refresh()
+        let sent = try #require(api.sourceRequests.last)
+        #expect(sent.sourceType == "repo_doc" && sent.scope == "o/r" && sent.uriPrefix == "session://")
+        #expect(sent.collections == ["orch-work"] && sent.allTags == ["owner:x", "repo:revok"] && sent.tags.isEmpty)
+        #expect(sent.since != nil && sent.until != nil && sent.since! < sent.until!)
+        #expect(sent.limit == SourcesQuery.defaultLimit && model.answered == sent)
+        #expect(model.parsed.chips.count == 8)
+        #expect(model.parsed.notes.last?.contains("stray words") == true, "words are ignored with a note")
+
+        await model.remove(model.parsed.chips[0])
+        #expect(api.sourceRequests.last?.sourceType == "web", "the menu's type applies again")
+    }
+
+    @Test func allLimitSendsNoCapAndSummarySaysHowMany() async {
+        let api = FakeMemory()
+        let model = SourcesModel(api: api)
+        #expect(model.summary == nil)
+        model.limit = 0
+        await model.refresh()
+        #expect(api.sourceRequests.last?.limit == 0)
+        #expect(model.summary == "All 4 sources · 9 chunks")
+        #expect(SourcesQuery.limitChoices.contains(0))
+        #expect(SourcesQuery.label(forLimit: 0) == "All" && SourcesQuery.label(forLimit: 50) == "50 at most")
+    }
+
+    @Test func summaryWhenCutOffOrEmpty() async {
+        final class Few: MemoryAPI, @unchecked Sendable {
+            var total = 10
+            func search(_ query: SearchQuery) async throws -> SearchResult { SearchResult(hits: []) }
+            func listSources(_ query: SourcesQuery) async throws -> SourceList {
+                SourceList(sources: total == 0 ? [] : [SourceSummary(uri: "a", chunks: 1)], totalSources: total,
+                           totalChunks: total)
+            }
+            func listCollections() async throws -> CollectionList { CollectionList(collections: [], spacesOn: false) }
+            func browseChunks(_ query: BrowseQuery, cursor: String) async throws -> BrowsePage { BrowsePage(hits: []) }
+        }
+        let api = Few()
+        let model = SourcesModel(api: api)
+        await model.refresh()
+        #expect(model.summary == "1 of 10 sources · 10 chunks")
+        api.total = 0
+        await model.refresh()
+        #expect(model.summary == "No sources match")
+    }
+
+    @Test func queryNormalizes() {
+        let q = SourcesQuery(sourceType: " web ", scope: " s ", uriPrefix: " a:// ", collections: ["", "c"], tags: ["", "t"],
+                             allTags: ["", "u"], limit: -4).normalized
+        #expect(q == SourcesQuery(sourceType: "web", scope: "s", uriPrefix: "a://", collections: ["c"], tags: ["t"],
+                                  allTags: ["u"], limit: 0))
+    }
+
+    @Test func legacyCallersMapToTheQuery() async throws {
+        let api = FakeMemory()
+        _ = try await api.listSources(type: "web", limit: 7, collections: ["c"])
+        _ = try await api.listSources(type: "", limit: 3)
+        #expect(api.sourceRequests == [SourcesQuery(sourceType: "web", collections: ["c"], limit: 7),
+                                       SourcesQuery(limit: 3)])
     }
 
     @Test func failureKeepsLastList() async {

@@ -19,11 +19,18 @@ extension DaemonClient {
         )
     }
 
-    public func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList {
+    public func listSources(_ query: SourcesQuery) async throws -> SourceList {
+        let q = query.normalized
         var request = Orchd_V1_ListSourcesRequest()
-        request.sourceType = type
-        request.limit = Int32(clamping: max(limit, 0))
-        request.collections = collections.filter { !$0.isEmpty }
+        request.sourceType = q.sourceType
+        request.scope = q.scope
+        request.uriPrefix = q.uriPrefix
+        request.limit = Int32(clamping: q.limit)
+        request.collections = q.collections
+        request.tags = q.tags
+        request.allTags = q.allTags
+        request.since = unixSeconds(q.since)
+        request.until = unixSeconds(q.until)
         let response = try await orchd.listSources(request, options: Self.longOptions)
         return SourceList(
             sources: response.sources.map {

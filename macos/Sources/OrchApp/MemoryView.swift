@@ -28,9 +28,11 @@ struct MemoryView: View {
                 SearchPane(model: search, sources: sources, collections: collections, actions: actions)
             case .browse:
                 if let browse { BrowsePane(model: browse, sources: sources, collections: collections, actions: actions) }
-            case .sources: SourcesPane(model: sources, collections: collections)
+            case .sources: SourcesPane(model: sources, collections: collections, actions: actions)
             case .directMessages:
-                if let directMessages { DirectMessageSearchView(model: directMessages) }
+                if let directMessages {
+                    DirectMessageSearchView(model: directMessages, collections: collections, types: sources.knownTypes)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

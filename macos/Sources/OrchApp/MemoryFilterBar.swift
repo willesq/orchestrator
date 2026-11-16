@@ -1,10 +1,10 @@
 import OrchKit
 import SwiftUI
 
-/// The filters Search and Browse share: a field that takes words and typed
-/// `key:value` filters, labelled menus, and a removable chip per typed
-/// filter. Menus and the field apply when the search is submitted; page size
-/// and relevance only change what is shown.
+/// The filters every Memory tab shares: a field that takes words and typed
+/// `key:value` filters, labelled menus (Collection always among them), and a
+/// removable chip per typed filter. The field applies when submitted; a
+/// ranked tab's page size and relevance only change what is shown.
 struct MemoryFilterBar: View {
     @Binding var text: String
     let prompt: String
@@ -23,12 +23,12 @@ struct MemoryFilterBar: View {
     let chips: [MemoryFilterChip]
     let notes: [String]
     let remove: (MemoryFilterChip) -> Void
-
-    static let syntaxHelp = """
-        Type filters into the field: type:repo_doc  repo:name  tag:owner:name  collection:name  \
-        uri:session://…  scope:name  since:7d  until:2026-11-01. Ages: 24h, 7d, 2w, today, yesterday. \
-        "Quoted phrases" stay part of the search. Several tag: or repo: filters must all match.
-        """
+    /// The `?` help: which typed filters this tab takes and what they do.
+    var syntaxHelp = MemoryFilterSyntax.search
+    /// The page-size menu's title; by default "Show" when ranked, else "Page".
+    var pageTitle: String?
+    /// Each page-size choice's label.
+    var pageLabel: (Int) -> String = { "\($0) at a time" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -38,14 +38,14 @@ struct MemoryFilterBar: View {
                     .onSubmit(submit)
                 Image(systemName: "questionmark.circle")
                     .foregroundStyle(Color.secondaryText)
-                    .help(Self.syntaxHelp)
-                    .accessibilityLabel(Self.syntaxHelp)
+                    .help(syntaxHelp)
+                    .accessibilityLabel(syntaxHelp)
                 Button(submitTitle, action: submit)
                     .keyboardShortcut(.defaultAction)
             }
             FlowLayout(spacing: 14) {
                 if let collections {
-                    CollectionPicker(model: collections, selection: $collection).fixedSize()
+                    CollectionPicker(model: collections, selection: $collection)
                 }
                 Picker("Type", selection: $sourceType) {
                     Text("Any type").tag("")
@@ -63,8 +63,8 @@ struct MemoryFilterBar: View {
                     .fixedSize()
                     .help(mode.wrappedValue.help)
                 }
-                Picker(mode == nil ? "Page" : "Show", selection: $pageSize) {
-                    ForEach(choices, id: \.self) { Text("\($0) at a time").tag($0) }
+                Picker(pageTitle ?? (mode == nil ? "Page" : "Show"), selection: $pageSize) {
+                    ForEach(choices, id: \.self) { Text(pageLabel($0)).tag($0) }
                 }
                 .fixedSize()
                 .help("How many results show before you ask for more")
@@ -97,6 +97,25 @@ struct MemoryFilterBar: View {
     }
 }
 
+/// The `?` help for each Memory tab: every tab takes the same typed keys,
+/// but words and `uri:` mean different things on each.
+enum MemoryFilterSyntax {
+    static let keys = "type:repo_doc  repo:name  tag:owner:name  collection:name  uri:session://…  scope:name  "
+        + "since:7d  until:2026-11-01"
+    static let common = "Ages: 24h, 7d, 2w, today, yesterday; until: runs to the end of that day. "
+        + "Several tag: or repo: filters must all match. A typed type:, collection: or uri: replaces the menu's."
+
+    static let search = "Type filters into the field: \(keys). Words are searched and ranked; "
+        + "\"quoted phrases\" stay part of the search; uri: is one source. \(common)"
+    static let browse = "Type filters into the field: \(keys). Browse lists by filters only, so words are ignored; "
+        + "uri: is one source. \(common)"
+    static let indexed = "Type filters into the field: \(keys). Indexed lists sources by filters only, so words are "
+        + "ignored; uri: matches every source whose address starts with it, e.g. uri:session://. \(common)"
+    static let directMessages = "Type filters into the field: \(keys). Words are searched and ranked among chat and "
+        + "direct messages; the Type menu starts at chat, and Any type adds the rest of memory. uri: is one "
+        + "conversation. \(common)"
+}
+
 /// One typed filter, with an x that removes it and searches again.
 struct FilterChipView: View {
     let chip: MemoryFilterChip
@@ -119,32 +138,37 @@ struct FilterChipView: View {
 }
 
 /// "All collections" and each readable collection with its chunk count.
-/// With spaces off there is one collection, so it is named, not offered.
+/// Always a menu, whether spaces are on or off, so the filter stays in the
+/// same place; with spaces off it offers the one collection there is.
 struct CollectionPicker: View {
     let model: CollectionsModel
     @Binding var selection: String
 
     var body: some View {
-        if let error = model.lastError, !model.loaded {
-            Label("Collections unavailable", systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.orange)
-                .help(displaySafe(error))
-        } else if !model.spacesOn && model.collections.count <= 1 {
-            HStack(spacing: 6) {
-                if let only = model.collections.first {
-                    Text(verbatim: only.label(spacesOn: false)).font(.caption)
-                }
-                Text("Spaces are off: one collection").textStyle(.caption)
-            }
-            .help("With spaces on, each space has its own collection to choose from")
-        } else {
+        HStack(spacing: 6) {
             Picker("Collection", selection: $selection) {
                 Text("All collections").tag("")
-                Divider()
+                if !names.isEmpty { Divider() }
                 ForEach(names, id: \.self) { Text(verbatim: model.label(for: $0)).tag($0) }
             }
             .help("Only results stored in this collection")
+            .fixedSize()
+            if let error = model.lastError, !model.loaded {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                    .help("Collections unavailable: \(displaySafe(error))")
+                    .accessibilityLabel("Collections unavailable")
+            } else if model.loaded && !model.spacesOn {
+                // Reason: at the companion column's width the caption does
+                // not fit beside the menu, so it gives way to an icon.
+                ViewThatFits(in: .horizontal) {
+                    Text("Spaces are off: one collection").textStyle(.caption).fixedSize()
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(Color.secondaryText)
+                        .accessibilityLabel("Spaces are off: one collection")
+                }
+                .help("Spaces are off: one collection. With spaces on, each space has its own collection to choose from")
+            }
         }
     }
 

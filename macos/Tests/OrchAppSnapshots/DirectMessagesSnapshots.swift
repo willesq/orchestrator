@@ -23,6 +23,16 @@ private struct Canned: DirectMessagesAPI {
     func searchDirectMessages(_ query: SearchQuery) async throws -> DirectMessageResult { try answer.get() }
 }
 
+/// The collections the Collection menu offers, spaces off.
+private struct OneCollection: MemoryAPI {
+    func search(_ query: SearchQuery) async throws -> SearchResult { SearchResult(hits: []) }
+    func listSources(_ query: SourcesQuery) async throws -> SourceList { SourceList(sources: [], totalSources: 0, totalChunks: 0) }
+    func listCollections() async throws -> CollectionList {
+        CollectionList(collections: [CollectionInfo(name: "orch-base", chunks: 63_012, hybrid: true)], spacesOn: false)
+    }
+    func browseChunks(_ query: BrowseQuery, cursor: String) async throws -> BrowsePage { BrowsePage(hits: []) }
+}
+
 private let sample = DirectMessageResult(hits: [
     DirectMessageHit(index: 0, text: "Can you review my patch before the release train on Thursday? The checklist is in the wiki.",
                      sourceURI: "slack://TACME/D0001", tenant: "slack:TACME", space: "acme", score: 0.82,
@@ -48,19 +58,22 @@ struct DirectMessagesSnapshots {
             ("failed", .failure(RPCError(code: .unavailable, message: "connection refused")), true, false),
             ("sharing", .success(sample), true, true),
         ]
+        let collections = CollectionsModel(api: OneCollection())
+        await collections.refresh()
         for (state, answer, search, sharing) in states {
             let model = DirectMessageSearchModel(api: Canned(answer: answer), isSharing: { sharing })
-            model.query.text = search ? "release train" : ""
+            model.query.text = search ? "release train since:30d" : ""
             if search { await model.search() }
-            try await renderAll(state, model: model, dir: dir)
+            try await renderAll(state, model: model, collections: collections, dir: dir)
         }
     }
 
-    private func renderAll(_ state: String, model: DirectMessageSearchModel, dir: URL) async throws {
+    private func renderAll(_ state: String, model: DirectMessageSearchModel, collections: CollectionsModel,
+                           dir: URL) async throws {
         let sizes: [(String, NSSize)] = [("default", NSSize(width: 790, height: 520)), ("companion", NSSize(width: 320, height: 640))]
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             for (width, size) in sizes {
-                try await render(DirectMessageSearchView(model: model)
+                try await render(DirectMessageSearchView(model: model, collections: collections, types: ["repo_doc", "web"])
                     .frame(width: size.width, height: size.height)
                     .background(Color(nsColor: .windowBackgroundColor)),
                     size: size, appearance: appearance,

@@ -21,7 +21,7 @@ private final class PagedMemory: MemoryAPI, @unchecked Sendable {
 
     func search(_ query: SearchQuery) async throws -> SearchResult { SearchResult(hits: []) }
 
-    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList {
+    func listSources(_ query: SourcesQuery) async throws -> SourceList {
         SourceList(sources: [], totalSources: 0, totalChunks: 0)
     }
 
@@ -279,6 +279,14 @@ private final class Documents: CatalogAPI, @unchecked Sendable {
             #expect(sent.collections == ["a"] && sent.sourceType == "web")
             _ = try await client.listSources(type: "", limit: 5)
             #expect(service.recorder.last(Orchd_V1_ListSourcesRequest.self)?.collections == [])
+            _ = try await client.listSources(SourcesQuery(
+                sourceType: " web ", scope: "o/r", uriPrefix: "session://", collections: ["c", ""], tags: ["any"],
+                allTags: ["repo:r", ""], since: Date(timeIntervalSince1970: 100), until: Date(timeIntervalSince1970: 200),
+                limit: 0))
+            let full = try #require(service.recorder.last(Orchd_V1_ListSourcesRequest.self))
+            #expect(full.sourceType == "web" && full.scope == "o/r" && full.uriPrefix == "session://")
+            #expect(full.collections == ["c"] && full.tags == ["any"] && full.allTags == ["repo:r"])
+            #expect(full.since == 100 && full.until == 200 && full.limit == 0, "0 lists every source")
         }
         #expect(DaemonClient.listTimeout == .seconds(30))
     }
