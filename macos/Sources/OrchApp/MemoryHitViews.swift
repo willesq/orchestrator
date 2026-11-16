@@ -86,11 +86,48 @@ struct HitInspector: View {
     /// is not opened in a browser, which would keep it in its history.
     var sensitive = false
 
+    @AppStorage(HitInspectorView.storageKey) private var view = HitInspectorView.fields
+    /// The hit's JSON, made display-safe once per hit rather than per redraw.
+    @State private var json: String?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text(verbatim: hit.displayTitle).textStyle(.title).textSelection(.enabled)
                 buttons
+                Picker("View", selection: $view) {
+                    ForEach(HitInspectorView.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help("Show this result's fields, or its raw JSON")
+                switch view {
+                case .fields: fields
+                case .json:
+                    if let json {
+                        Text(verbatim: json)
+                            .textStyle(.code)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .padding(14)
+        }
+        .task(id: hit) {
+            json = nil
+            let hit = hit
+            // JSON-escaped already; display-safe for bidi and the like.
+            let safe = await Task.detached { displaySafeLines(hit.json) }.value
+            guard !Task.isCancelled else { return }
+            json = safe
+        }
+    }
+
+    @ViewBuilder private var fields: some View {
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 6) {
                     field("Source") {
                         Text(verbatim: displaySafe(hit.sourceURI)).textStyle(.code).textSelection(.enabled)
@@ -132,9 +169,6 @@ struct HitInspector: View {
                     .font(.callout)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(14)
-        }
     }
 
     private var buttons: some View {
@@ -222,7 +256,6 @@ struct HitInspector: View {
 struct SourceDocumentSheet: View {
     let model: SourceDocumentModel
     @Environment(\.dismiss) private var dismiss
-    @State private var text: NSAttributedString?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -235,6 +268,15 @@ struct SourceDocumentSheet: View {
                 Spacer()
                 if let doc = model.document {
                     Text("\(doc.chunks) chunk\(doc.chunks == 1 ? "" : "s")").textStyle(.caption)
+                    if !doc.oversize {
+                        Button {
+                            SourceDocumentWindows.shared.open(doc)
+                            dismiss()
+                        } label: {
+                            Label("Open in Window", systemImage: "macwindow")
+                        }
+                        .help("Open in a window you can resize, zoom or take full screen")
+                    }
                 }
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
@@ -243,37 +285,17 @@ struct SourceDocumentSheet: View {
             if model.isLoading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = model.lastError {
-                Label { Text(verbatim: "Could not open the source: \(error)") } icon: {
+                Label { Text(verbatim: "Could not open the source: \(displaySafe(error))") } icon: {
                     Image(systemName: "exclamationmark.triangle")
                 }
                 .foregroundStyle(.red)
                 .padding(12)
                 Spacer()
             } else if let doc = model.document {
-                Text(doc.malformed
-                    ? "Some chunks were out of order, so this is a best effort."
-                    : "Close to the original but not exact: a table or code block split across chunks may look slightly off.")
-                    .textStyle(.caption)
-                    .padding(12)
-                if doc.oversize {
-                    Text("This source is too large to show here.").foregroundStyle(Color.secondaryText).padding(12)
-                    Spacer()
-                } else if let text {
-                    RichTextView(text: text)
-                } else {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                SourceDocumentBody(document: doc)
             }
         }
-        .frame(minWidth: 560, idealWidth: 720, minHeight: 420, idealHeight: 600)
-        .task(id: model.document?.sourceURI) {
-            text = nil
-            guard let raw = model.document?.text else { return }
-            // Stored text is shown as its source, never rendered; escaping
-            // control characters in a long source runs off the main thread.
-            let safe = await Task.detached { displaySafeLines(raw) }.value
-            guard !Task.isCancelled else { return }
-            text = plainSource(safe)
-        }
+        // No maximum, so the sheet can be dragged larger.
+        .frame(minWidth: 560, idealWidth: 720, maxWidth: .infinity, minHeight: 420, idealHeight: 600, maxHeight: .infinity)
     }
 }

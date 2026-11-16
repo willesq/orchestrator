@@ -661,8 +661,13 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
   - **Inspector:** selecting a row opens it beside the list (`AdaptiveSplit`, stacked below the
     split width): every `SearchHit` field (address, heading, type, scope, collection, space when
     set, trust, tenant, tags, happened/ended/stored, relevance/keyword/exact in Search, point ID,
-    chunk index, full text). **Copy as JSON** copies every field with orchd's names; **Open whole
-    source** shows `GetDocument`'s rebuild as plain text in a sheet; **Search within** and
+    chunk index, full text). A **Fields | JSON** switch (`HitInspectorView`, kept in defaults
+    under `MemoryInspectorView` so it holds across hits and launches) shows the same hit as its raw
+    JSON instead, display-safe and selectable. **Copy as JSON** copies every field with orchd's
+    names; **Open whole source** shows `GetDocument`'s rebuild as plain text in a sheet that can be
+    dragged larger, whose **Open in Window** moves it to a window of its own
+    (`SourceDocumentWindows`: resizable, zoomable, full screen, one per source, its size kept under
+    `OrchSourceDocument`) for long sources such as session transcripts; **Search within** and
     **Browse source** set the `uri:` filter; **Reveal in Finder** (`file://` only) and **Open**
     (plain `http(s)` only, as for web sources) check the scheme again on click (`SourceLink`).
 - **Memory → Search:** the `Search` RPC. The Memory pane's `SearchModel` is `paged`: it asks once

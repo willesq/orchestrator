@@ -158,7 +158,10 @@ The app's Memory pane has the same reads, as the operator (it sees every collect
   collection, space, trust, tenant, tags, dates, scores, point ID, chunk number and the full
   text, with **Copy as JSON**, **Open whole source** (as `orch rag show` rebuilds it), **Search
   within** and **Browse source**, and **Reveal in Finder** for a `file://` source or **Open** for
-  a web page.
+  a web page. Switch **Fields** to **JSON** to read the result as raw JSON without copying it; the
+  choice is remembered. A whole source opens in a sheet you can drag larger; **Open in Window**
+  gives it a window of its own to resize, zoom or take full screen, which suits a long session
+  transcript.
 
 Stored text is shown as plain text, never rendered, and only `file://` and `http(s)` addresses
 open.
