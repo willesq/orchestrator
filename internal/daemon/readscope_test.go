@@ -218,6 +218,26 @@ func (e readEnv) readAll(t *testing.T, ctx context.Context, query, uri string) [
 			got = append(got, src.GetSourceUri())
 		}
 	}
+	for _, req := range []*orchdv1.BrowseChunksRequest{
+		{SourceUri: uri},
+		{Tags: []string{"team-globex"}, Limit: maxBrowseLimit},
+		{Collections: []string{"c__globex", "c__acme", "c"}, Scope: "work", AllTags: []string{"common"}},
+	} {
+		rep, err := e.s.BrowseChunks(ctx, req)
+		if err != nil {
+			t.Fatalf("BrowseChunks(%v): %v", req, err)
+		}
+		for _, h := range rep.GetHits() {
+			got = append(got, h.GetText(), h.GetSourceUri(), h.GetHeading())
+		}
+	}
+	cols, err := e.s.ListCollections(ctx, &orchdv1.ListCollectionsRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cols.GetCollections() {
+		got = append(got, c.GetName(), c.GetSpace())
+	}
 	doc, err := e.s.GetDocument(ctx, &orchdv1.GetDocumentRequest{SourceUri: uri})
 	switch {
 	case grpcstatus.Code(err) == codes.NotFound:
@@ -443,9 +463,10 @@ func TestMemoryFilterOffIsLogged(t *testing.T) {
 	if !slices.Contains(got, memoURI("globex", 9)) {
 		t.Fatal("with memory filtering off, globex's chunk was not returned")
 	}
-	// readAll makes 6 searches, 3 listings, a document and a docs list.
-	if n := strings.Count(logs.String(), "not enforced"); n != 11 {
-		t.Fatalf("%d responses logged as not enforced, want 11:\n%s", n, logs.String())
+	// readAll makes 6 searches, 3 listings, 3 browses, a collections list,
+	// a document and a docs list.
+	if n := strings.Count(logs.String(), "not enforced"); n != 15 {
+		t.Fatalf("%d responses logged as not enforced, want 15:\n%s", n, logs.String())
 	}
 	if !strings.Contains(logs.String(), "Search for session sess-acme: not enforced") {
 		t.Fatalf("log does not name the RPC and caller:\n%s", logs.String())

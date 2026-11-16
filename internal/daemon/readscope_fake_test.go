@@ -144,11 +144,20 @@ func (q *searchQdrant) serve(w http.ResponseWriter, r *http.Request) {
 	case action == "points/query":
 		reply(map[string]any{"points": []any{}})
 	case action == "points/scroll":
+		// Like Qdrant, a page starts at the offset id, in id order.
+		ids := chunkMatches(points, body["filter"])
+		if off, ok := body["offset"].(string); ok {
+			ids = ids[sort.SearchStrings(ids, off):]
+		}
+		var next any
+		if limit, ok := body["limit"].(float64); ok && int(limit) < len(ids) {
+			next, ids = ids[int(limit)], ids[:int(limit)]
+		}
 		out := []map[string]any{}
-		for _, id := range chunkMatches(points, body["filter"]) {
+		for _, id := range ids {
 			out = append(out, map[string]any{"id": id, "payload": points[id].payload})
 		}
-		reply(map[string]any{"points": out, "next_page_offset": nil})
+		reply(map[string]any{"points": out, "next_page_offset": next})
 	case action == "points/count":
 		reply(map[string]any{"count": len(chunkMatches(points, body["filter"]))})
 	default:

@@ -184,7 +184,7 @@ func (s *Service) finishLazy(ctx context.Context, targets []spaceStore, cands []
 	}
 	hits := make([]Hit, 0, len(ranked))
 	for _, c := range ranked {
-		hits = append(hits, toHit(c.hit, c.cosine, c.keyword, idents))
+		hits = append(hits, toHit(c.hit, c.collection, c.cosine, c.keyword, idents))
 	}
 	return hits, nil
 }

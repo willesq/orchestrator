@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
@@ -312,6 +313,9 @@ func (s *server) search(ctx context.Context, req *orchdv1.SearchRequest, method 
 	if err := checkTags(req.GetTags(), req.GetAllTags()); err != nil {
 		return nil, err
 	}
+	if err := checkCollections(req.GetCollections()); err != nil {
+		return nil, err
+	}
 	tr, err := timeRange(req.GetSince(), req.GetUntil())
 	if err != nil {
 		return nil, err
@@ -332,6 +336,9 @@ func (s *server) search(ctx context.Context, req *orchdv1.SearchRequest, method 
 		SourceURI:  req.GetSourceUri(),
 		Mode:       req.GetMode(),
 		Range:      tr,
+		// Reason: collections narrow only; rag keeps just those the
+		// caller's spaces already chose.
+		Collections: req.GetCollections(),
 	}
 	opts.DirectMessages = directMessages
 	hits, fallback, err := s.rag.Search(ctx, req.GetQuery(), opts)
@@ -347,7 +354,14 @@ func (s *server) search(ctx context.Context, req *orchdv1.SearchRequest, method 
 	if err != nil {
 		return nil, scope.storeError("Search", err)
 	}
-	out := &orchdv1.SearchResponse{Hits: make([]*orchdv1.SearchHit, 0, len(hits)), Fallback: fallback}
+	out := &orchdv1.SearchResponse{Hits: s.searchHits(hits), Fallback: fallback}
+	s.describeSearch(ctx, scope, out)
+	return out, nil
+}
+
+// searchHits converts hits for a reply.
+func (s *server) searchHits(hits []rag.Hit) []*orchdv1.SearchHit {
+	out := make([]*orchdv1.SearchHit, 0, len(hits))
 	// Reason (SP-083): with no policy, or spaces off, every chunk is
 	// stamped shared and spaces mean nothing to the reader, so no space is
 	// named; under a policy each hit's stored space is one the caller reads.
@@ -357,7 +371,7 @@ func (s *server) search(ctx context.Context, req *orchdv1.SearchRequest, method 
 		if !placed {
 			space = ""
 		}
-		out.Hits = append(out.Hits, &orchdv1.SearchHit{
+		hit := &orchdv1.SearchHit{
 			Text:         h.Text,
 			SourceUri:    h.SourceURI,
 			SourceType:   h.SourceType,
@@ -373,16 +387,24 @@ func (s *server) search(ctx context.Context, req *orchdv1.SearchRequest, method 
 			Trust:        h.Trust,
 			Space:        space,
 			Tenant:       h.Tenant,
-		})
+			Collection:   h.Collection,
+			PointId:      h.PointID,
+		}
+		if h.ChunkIndex != nil {
+			hit.ChunkIndex = proto.Int32(int32(*h.ChunkIndex))
+		}
+		out = append(out, hit)
 	}
-	s.describeSearch(ctx, scope, out)
-	return out, nil
+	return out
 }
 
 var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListSources_FullMethodName,
 	spaceDecision{spaceFiltered, "memory inventory, listed only from the caller's readable spaces"}))
 
 func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesRequest) (*orchdv1.ListSourcesResponse, error) {
+	if err := checkCollections(req.GetCollections()); err != nil {
+		return nil, err
+	}
 	tr, err := timeRange(req.GetSince(), req.GetUntil())
 	if err != nil {
 		return nil, err
@@ -396,6 +418,8 @@ func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesReques
 		URIPrefix:  req.GetUriPrefix(),
 		Limit:      int(req.GetLimit()),
 		Range:      tr,
+		// Narrows as a search's collections do.
+		Collections: req.GetCollections(),
 	})
 	if err != nil {
 		return nil, scope.storeError("ListSources", err)

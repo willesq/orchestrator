@@ -538,9 +538,10 @@ harnesses orch knows (Claude Code, Codex) are told apart from a terminal.
 ### Reading memory by space
 
 Every memory read path applies the caller's readable spaces inside orchd (SP-025, INV-01,
-INV-02; `internal/daemon/readscope.go`): `Search`, `ListSources`, `GetDocument` and `ListDocs`,
-and so every client built on them (`rag_search`, `rag_list_sources`, auto-RAG, session recall and
-`orch rag why`, whose `--cwd` only picks project tags). `readScope` decides, per call:
+INV-02; `internal/daemon/readscope.go`): `Search`, `ListSources`, `ListCollections`,
+`BrowseChunks`, `GetDocument` and `ListDocs`, and so every client built on them (`rag_search`,
+`rag_list_sources`, auto-RAG, session recall, `orch rag collections`, `orch rag browse`, Orch.app's
+Memory view and `orch rag why`, whose `--cwd` only picks project tags). `readScope` decides, per call:
 
 - **No policy with spaces** (none applied, or no engine): every collection, as before (INV-10).
 - **The applied revision does not verify:** nothing.
@@ -564,7 +565,8 @@ and so every client built on them (`rag_search`, `rag_list_sources`, auto-RAG, s
 - **Anyone else** (an unpinned harness, an unidentified process, the operator when it is not Orch.app,
   a task orchd does not track, a pin whose space the policy does not name): public spaces only.
 
-Request fields (tags, `source_uri`, scope, a URI prefix, `cwd`) only narrow within those spaces.
+Request fields (tags, `source_uri`, scope, a URI prefix, `collections`, `cwd`) only narrow within
+those spaces: a collection name outside them is ignored, never read.
 `GetDocument` answers `NotFound` for a source held only in a space the caller cannot read, as for
 one that does not exist. `ListDocs` lists the stored docs of the caller's spaces, the owners and
 repos those docs are in, and owners whose GitHub org is bound to a readable space with all their
@@ -589,7 +591,7 @@ is always one the caller reads. With no policy applied, or with spaces off, `spa
 though chunks are stamped `shared`.
 
 Every RPC has an entry in `readSpaceDecisions` (`internal/daemon/readspaces_registry.go`,
-SP-025.2; registered beside its handler, see [Adding an RPC](#adding-an-rpc)): `filtered` (the four above and `SearchDirectMessages`), `operator` (refused to every caller but the operator),
+SP-025.2; registered beside its handler, see [Adding an RPC](#adding-an-rpc)): `filtered` (the six above and `SearchDirectMessages`), `operator` (refused to every caller but the operator),
 `own` (the caller's own data or public content), `records` (orch records other than memory,
 [kept by space](#records-by-space)) or `none`. A test fails for an RPC with no entry, as for one
 missing from `taskCallable` and `operatorActions`.
@@ -1135,8 +1137,10 @@ are described with their feature: the spaces policy's `SetSpacesDraft`, `DiffSpa
 |---|---|---|
 | `Ping` | → version, uptime | — |
 | `Ingest` | text, source_uri, source_type, scope, tags, started_at, ended_at, timeline → chunks | type defaults to `manual`; always written as `client`, whatever type or URI is declared; refused (`FailedPrecondition`) for a source the docs or sources sync stored, matched on the exact URI, so it is advisory (see [memory.md](memory.md#provenance)) |
-| `Search` | query, top_k, scope, source_type, tags (any), mode, since, until, per_source, ranking → hits (with heading, the writer-assigned trust, the stored space and a chat hit's tenant), fallback | top_k 0–100; mode `hybrid`/`dense`/empty; ranking `weighted`/`plain`/empty; per_source at most 100 (0 = `rag.search.per_source`, negative = no cap); since ≤ until, neither negative; explicit hybrid that cannot run → `FailedPrecondition` |
-| `ListSources` | source_type, scope, uri_prefix, limit, since, until → sources, totals | same range rules; limit 0 = all |
+| `Search` | query, top_k, scope, source_type, tags (any), mode, since, until, per_source, ranking, collections → hits (with heading, the writer-assigned trust, the stored space, a chat hit's tenant, and the collection, point ID and chunk index it was read from), fallback | top_k 0–100; mode `hybrid`/`dense`/empty; ranking `weighted`/`plain`/empty; per_source at most 100 (0 = `rag.search.per_source`, negative = no cap); since ≤ until, neither negative; explicit hybrid that cannot run → `FailedPrecondition`; `collections` only narrows the caller's readable collections (a name outside them is ignored) |
+| `ListSources` | source_type, scope, uri_prefix, limit, since, until, collections → sources, totals | same range rules; limit 0 = all; `collections` narrows as in `Search` |
+| `ListCollections` | → collections (name, space, chunks, hybrid; the base first, then by name), spaces_on | the collections the caller reads that exist ([memory.md](memory.md#browsing-and-listing-collections)); `chunks` counts what a browse of it would total; never the migration backup (`rag.qdrant.backup_collection`) or a running migration's target; `space` empty with no policy applied; `spaces_on` while spaces are on and enforced; open to queued tasks |
+| `BrowseChunks` | collections, source_type, scope, source_uri, tags (any), all_tags, since, until, limit, cursor → hits (no scores), next_cursor, total | every matching chunk, unranked, page by page ([memory.md](memory.md#browsing-and-listing-collections)); limit 0–200 (0 = 50), negative or larger → `InvalidArgument`; tags as `Search`; same range rules; a malformed cursor, or one from another listing → `InvalidArgument`; `total` on the first page only; chat direct messages never returned; open to queued tasks |
 | `DeleteSource` | source_uri, confirm → deleted | `confirm` required server-side (`FailedPrecondition`), so no client can skip it; logged before and after |
 | `RetagSource` | source_uri, space, confirm, expect_from → from, chunks, moved | operator-only (refused to callers descended from a harness or orchd); moves one source with its vectors to the space and records a sticky override ([memory.md](memory.md#retag)); no URI, a URI over 4 KiB or a space the applied policy lacks → `InvalidArgument`; no policy, an unconfirmed move into public, out of an isolated space or out of quarantine, a source not in `expect_from`, or a migration, re-index or relabel running → `FailedPrecondition`; not stored → `NotFound`; answers name spaces and counts only |
 | `Dispatch` | agent, body, cwd, task_kind, model → id, worker_enabled, route | agent default `dev`; body ≤ 64 KiB; cwd absolute; routing below; queue full → `ResourceExhausted` |

@@ -21,18 +21,19 @@ import (
 
 func newRAGCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{Use: "rag", Short: "Inspect and prune the RAG store's contents"}
-	cmd.AddCommand(newRAGSourcesCmd(cf), newRAGShowCmd(cf), newRAGForgetCmd(cf), newRAGEvalCmd(cf), newRAGMigrateCmd(cf), newRAGBackfillCmd(cf), newRAGDedupeCmd(cf), newRAGReindexCmd(cf), newRAGRelabelCmd(cf), newRAGWhyCmd(cf))
+	cmd.AddCommand(newRAGSourcesCmd(cf), newRAGCollectionsCmd(cf), newRAGBrowseCmd(cf), newRAGShowCmd(cf), newRAGForgetCmd(cf), newRAGEvalCmd(cf), newRAGMigrateCmd(cf), newRAGBackfillCmd(cf), newRAGDedupeCmd(cf), newRAGReindexCmd(cf), newRAGRelabelCmd(cf), newRAGWhyCmd(cf))
 	return cmd
 }
 
 func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 	var (
-		sourceType string
-		scope      string
-		prefix     string
-		limit      int
-		since      string
-		until      string
+		sourceType  string
+		scope       string
+		prefix      string
+		limit       int
+		since       string
+		until       string
+		collections []string
 	)
 	cmd := &cobra.Command{
 		Use:   "sources",
@@ -51,12 +52,13 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 			defer cancel()
 			resp, err := client.ListSources(ctx, &orchdv1.ListSourcesRequest{
-				SourceType: sourceType,
-				Scope:      scope,
-				UriPrefix:  prefix,
-				Limit:      clampInt32(limit),
-				Since:      from,
-				Until:      to,
+				SourceType:  sourceType,
+				Scope:       scope,
+				UriPrefix:   prefix,
+				Limit:       clampInt32(limit),
+				Since:       from,
+				Until:       to,
+				Collections: collections,
 			})
 			if err != nil {
 				return err
@@ -93,6 +95,7 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&prefix, "prefix", "", "filter to URIs with this prefix, e.g. session://")
 	cmd.Flags().IntVar(&limit, "limit", 50, "max sources to show (0 for all)")
 	addBoundFlags(cmd, &since, &until)
+	addCollectionFlag(cmd, &collections)
 	return cmd
 }
 

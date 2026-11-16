@@ -15,9 +15,10 @@ import (
 )
 
 // Every memory read path applies the caller's readable spaces inside orchd
-// (SP-025, INV-01, INV-02): Search, ListSources, GetDocument and ListDocs,
-// and so every client built on them (rag_search, rag_list_sources, auto-RAG,
-// session recall, orch rag why). The spaces come from the resolved caller
+// (SP-025, INV-01, INV-02): Search, ListSources, ListCollections,
+// BrowseChunks, GetDocument and ListDocs, and so every client built on them
+// (rag_search, rag_list_sources, auto-RAG, session recall, orch rag why,
+// orch rag browse). The spaces come from the resolved caller
 // alone (caller_session.go); a request's filters (tags, source_uri, scope,
 // cwd) only narrow what those spaces hold. See docs/internals/daemon.md
 // "Reading memory by space".
