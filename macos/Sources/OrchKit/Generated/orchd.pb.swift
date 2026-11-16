@@ -129,6 +129,11 @@ public nonisolated struct Orchd_V1_SearchRequest: Sendable {
   /// rag.search.ranking
   public var ranking: String = String()
 
+  /// optional: only these collections, as ListCollections names them. It
+  /// narrows what the caller's spaces let it read and never widens it; a name
+  /// outside them is ignored.
+  public var collections: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -164,58 +169,126 @@ public nonisolated struct Orchd_V1_SearchResponse: Sendable {
   public init() {}
 }
 
-public nonisolated struct Orchd_V1_SearchHit: Sendable {
+public nonisolated struct Orchd_V1_SearchHit: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var text: String = String()
+  public var text: String {
+    get {_storage._text}
+    set {_uniqueStorage()._text = newValue}
+  }
 
-  public var sourceUri: String = String()
+  public var sourceUri: String {
+    get {_storage._sourceUri}
+    set {_uniqueStorage()._sourceUri = newValue}
+  }
 
-  public var sourceType: String = String()
+  public var sourceType: String {
+    get {_storage._sourceType}
+    set {_uniqueStorage()._sourceType = newValue}
+  }
 
-  public var score: Float = 0
+  public var score: Float {
+    get {_storage._score}
+    set {_uniqueStorage()._score = newValue}
+  }
 
-  public var scope: String = String()
+  public var scope: String {
+    get {_storage._scope}
+    set {_uniqueStorage()._scope = newValue}
+  }
 
-  public var tags: [String] = []
+  public var tags: [String] {
+    get {_storage._tags}
+    set {_uniqueStorage()._tags = newValue}
+  }
 
   /// BM25 score; 0 when keyword search did not find it
-  public var keywordScore: Float = 0
+  public var keywordScore: Float {
+    get {_storage._keywordScore}
+    set {_uniqueStorage()._keywordScore = newValue}
+  }
 
   /// contains, verbatim, a code identifier from the query
-  public var exact: Bool = false
+  public var exact: Bool {
+    get {_storage._exact}
+    set {_uniqueStorage()._exact = newValue}
+  }
 
   /// when what the hit describes happened, and when it was stored
   /// (Unix seconds; 0 = unknown)
-  public var startedAt: Int64 = 0
+  public var startedAt: Int64 {
+    get {_storage._startedAt}
+    set {_uniqueStorage()._startedAt = newValue}
+  }
 
-  public var endedAt: Int64 = 0
+  public var endedAt: Int64 {
+    get {_storage._endedAt}
+    set {_uniqueStorage()._endedAt = newValue}
+  }
 
-  public var ingestedAt: Int64 = 0
+  public var ingestedAt: Int64 {
+    get {_storage._ingestedAt}
+    set {_uniqueStorage()._ingestedAt = newValue}
+  }
 
   /// the markdown section the chunk came from, if any
-  public var heading: String = String()
+  public var heading: String {
+    get {_storage._heading}
+    set {_uniqueStorage()._heading = newValue}
+  }
 
   /// the trust tier orchd's writer gave it: repo, web, session, file or
   /// client; empty for content stored before writers were recorded
-  public var trust: String = String()
+  public var trust: String {
+    get {_storage._trust}
+    set {_uniqueStorage()._trust = newValue}
+  }
 
   /// space is the space orchd's placer stored the chunk in (SP-083); empty
   /// with no spaces policy applied or with spaces off. Every hit is one the
   /// caller may read, so its space is always one the caller reads.
-  public var space: String = String()
+  public var space: String {
+    get {_storage._space}
+    set {_uniqueStorage()._space = newValue}
+  }
 
   /// tenant is a chat chunk's tenant, "<system>:<tenant>" (e.g.
   /// slack:T0123) as its stored origin has it (a policy matches it without
   /// case); empty for anything else. Both fields are stored data: a client
   /// putting them in an agent's prompt must quote them like other fields.
-  public var tenant: String = String()
+  public var tenant: String {
+    get {_storage._tenant}
+    set {_uniqueStorage()._tenant = newValue}
+  }
+
+  /// collection is the collection the chunk was read from; point_id its
+  /// point there; chunk_index its place in its source (absent when unknown).
+  public var collection: String {
+    get {_storage._collection}
+    set {_uniqueStorage()._collection = newValue}
+  }
+
+  public var pointID: String {
+    get {_storage._pointID}
+    set {_uniqueStorage()._pointID = newValue}
+  }
+
+  public var chunkIndex: Int32 {
+    get {_storage._chunkIndex ?? 0}
+    set {_uniqueStorage()._chunkIndex = newValue}
+  }
+  /// Returns true if `chunkIndex` has been explicitly set.
+  public var hasChunkIndex: Bool {_storage._chunkIndex != nil}
+  /// Clears the value of `chunkIndex`. Subsequent reads from it will return its default value.
+  public mutating func clearChunkIndex() {_uniqueStorage()._chunkIndex = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Orchd_V1_ListSourcesRequest: Sendable {
@@ -240,6 +313,113 @@ public nonisolated struct Orchd_V1_ListSourcesRequest: Sendable {
   public var since: Int64 = 0
 
   public var until: Int64 = 0
+
+  /// optional: only these collections; narrows as SearchRequest.collections
+  public var collections: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListCollectionsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListCollectionsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// the base first, then by name
+  public var collections: [Orchd_V1_CollectionInfo] = []
+
+  /// spaces_on: spaces are switched on, so each space has its own collection.
+  public var spacesOn: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// CollectionInfo is one readable vector-store collection.
+public nonisolated struct Orchd_V1_CollectionInfo: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  /// space is the space the collection holds; empty for the base collection.
+  public var space: String = String()
+
+  public var chunks: Int64 = 0
+
+  /// hybrid: the collection has a keyword index, so hybrid search can run.
+  public var hybrid: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_BrowseChunksRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Filters, each optional and exact-match, as SearchRequest's.
+  public var collections: [String] = []
+
+  public var sourceType: String = String()
+
+  public var scope: String = String()
+
+  public var sourceUri: String = String()
+
+  /// payload.tags contains any
+  public var tags: [String] = []
+
+  /// payload.tags contains every one
+  public var allTags: [String] = []
+
+  /// Unix seconds; 0 = open
+  public var since: Int64 = 0
+
+  public var until: Int64 = 0
+
+  /// limit is the page size: 1 to 200; 0 means 50.
+  public var limit: Int32 = 0
+
+  /// cursor continues from a previous response's next_cursor; empty starts
+  /// at the beginning. It is opaque and valid only with the same filters.
+  public var cursor: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_BrowseChunksResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// hits carry no scores: score, keyword_score and exact are zero.
+  public var hits: [Orchd_V1_SearchHit] = []
+
+  /// next_cursor continues the listing; empty when this page is the last.
+  public var nextCursor: String = String()
+
+  /// total is how many chunks match the filters, counted on the first page
+  /// only (cursor empty); 0 on later pages.
+  public var total: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -5870,7 +6050,7 @@ nonisolated extension Orchd_V1_IngestResponse: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}query\0\u{3}top_k\0\u{1}scope\0\u{3}source_type\0\u{1}tags\0\u{1}mode\0\u{1}since\0\u{1}until\0\u{3}source_uri\0\u{3}all_tags\0\u{3}per_source\0\u{1}ranking\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}query\0\u{3}top_k\0\u{1}scope\0\u{3}source_type\0\u{1}tags\0\u{1}mode\0\u{1}since\0\u{1}until\0\u{3}source_uri\0\u{3}all_tags\0\u{3}per_source\0\u{1}ranking\0\u{1}collections\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5890,6 +6070,7 @@ nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtob
       case 10: try { try decoder.decodeRepeatedStringField(value: &self.allTags) }()
       case 11: try { try decoder.decodeSingularInt32Field(value: &self.perSource) }()
       case 12: try { try decoder.decodeSingularStringField(value: &self.ranking) }()
+      case 13: try { try decoder.decodeRepeatedStringField(value: &self.collections) }()
       default: break
       }
     }
@@ -5932,6 +6113,9 @@ nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtob
     if !self.ranking.isEmpty {
       try visitor.visitSingularStringField(value: self.ranking, fieldNumber: 12)
     }
+    if !self.collections.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.collections, fieldNumber: 13)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -5948,6 +6132,7 @@ nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtob
     if lhs.allTags != rhs.allTags {return false}
     if lhs.perSource != rhs.perSource {return false}
     if lhs.ranking != rhs.ranking {return false}
+    if lhs.collections != rhs.collections {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -6005,99 +6190,188 @@ nonisolated extension Orchd_V1_SearchResponse: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchHit"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}source_uri\0\u{3}source_type\0\u{1}score\0\u{1}scope\0\u{1}tags\0\u{3}keyword_score\0\u{1}exact\0\u{3}started_at\0\u{3}ended_at\0\u{3}ingested_at\0\u{1}heading\0\u{1}trust\0\u{1}space\0\u{1}tenant\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}source_uri\0\u{3}source_type\0\u{1}score\0\u{1}scope\0\u{1}tags\0\u{3}keyword_score\0\u{1}exact\0\u{3}started_at\0\u{3}ended_at\0\u{3}ingested_at\0\u{1}heading\0\u{1}trust\0\u{1}space\0\u{1}tenant\0\u{1}collection\0\u{3}point_id\0\u{3}chunk_index\0")
+
+  fileprivate class _StorageClass {
+    var _text: String = String()
+    var _sourceUri: String = String()
+    var _sourceType: String = String()
+    var _score: Float = 0
+    var _scope: String = String()
+    var _tags: [String] = []
+    var _keywordScore: Float = 0
+    var _exact: Bool = false
+    var _startedAt: Int64 = 0
+    var _endedAt: Int64 = 0
+    var _ingestedAt: Int64 = 0
+    var _heading: String = String()
+    var _trust: String = String()
+    var _space: String = String()
+    var _tenant: String = String()
+    var _collection: String = String()
+    var _pointID: String = String()
+    var _chunkIndex: Int32? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _text = source._text
+      _sourceUri = source._sourceUri
+      _sourceType = source._sourceType
+      _score = source._score
+      _scope = source._scope
+      _tags = source._tags
+      _keywordScore = source._keywordScore
+      _exact = source._exact
+      _startedAt = source._startedAt
+      _endedAt = source._endedAt
+      _ingestedAt = source._ingestedAt
+      _heading = source._heading
+      _trust = source._trust
+      _space = source._space
+      _tenant = source._tenant
+      _collection = source._collection
+      _pointID = source._pointID
+      _chunkIndex = source._chunkIndex
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.text) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.sourceUri) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.sourceType) }()
-      case 4: try { try decoder.decodeSingularFloatField(value: &self.score) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.scope) }()
-      case 6: try { try decoder.decodeRepeatedStringField(value: &self.tags) }()
-      case 7: try { try decoder.decodeSingularFloatField(value: &self.keywordScore) }()
-      case 8: try { try decoder.decodeSingularBoolField(value: &self.exact) }()
-      case 9: try { try decoder.decodeSingularInt64Field(value: &self.startedAt) }()
-      case 10: try { try decoder.decodeSingularInt64Field(value: &self.endedAt) }()
-      case 11: try { try decoder.decodeSingularInt64Field(value: &self.ingestedAt) }()
-      case 12: try { try decoder.decodeSingularStringField(value: &self.heading) }()
-      case 13: try { try decoder.decodeSingularStringField(value: &self.trust) }()
-      case 14: try { try decoder.decodeSingularStringField(value: &self.space) }()
-      case 15: try { try decoder.decodeSingularStringField(value: &self.tenant) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._text) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._sourceUri) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._sourceType) }()
+        case 4: try { try decoder.decodeSingularFloatField(value: &_storage._score) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._scope) }()
+        case 6: try { try decoder.decodeRepeatedStringField(value: &_storage._tags) }()
+        case 7: try { try decoder.decodeSingularFloatField(value: &_storage._keywordScore) }()
+        case 8: try { try decoder.decodeSingularBoolField(value: &_storage._exact) }()
+        case 9: try { try decoder.decodeSingularInt64Field(value: &_storage._startedAt) }()
+        case 10: try { try decoder.decodeSingularInt64Field(value: &_storage._endedAt) }()
+        case 11: try { try decoder.decodeSingularInt64Field(value: &_storage._ingestedAt) }()
+        case 12: try { try decoder.decodeSingularStringField(value: &_storage._heading) }()
+        case 13: try { try decoder.decodeSingularStringField(value: &_storage._trust) }()
+        case 14: try { try decoder.decodeSingularStringField(value: &_storage._space) }()
+        case 15: try { try decoder.decodeSingularStringField(value: &_storage._tenant) }()
+        case 16: try { try decoder.decodeSingularStringField(value: &_storage._collection) }()
+        case 17: try { try decoder.decodeSingularStringField(value: &_storage._pointID) }()
+        case 18: try { try decoder.decodeSingularInt32Field(value: &_storage._chunkIndex) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.text.isEmpty {
-      try visitor.visitSingularStringField(value: self.text, fieldNumber: 1)
-    }
-    if !self.sourceUri.isEmpty {
-      try visitor.visitSingularStringField(value: self.sourceUri, fieldNumber: 2)
-    }
-    if !self.sourceType.isEmpty {
-      try visitor.visitSingularStringField(value: self.sourceType, fieldNumber: 3)
-    }
-    if self.score.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.score, fieldNumber: 4)
-    }
-    if !self.scope.isEmpty {
-      try visitor.visitSingularStringField(value: self.scope, fieldNumber: 5)
-    }
-    if !self.tags.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.tags, fieldNumber: 6)
-    }
-    if self.keywordScore.bitPattern != 0 {
-      try visitor.visitSingularFloatField(value: self.keywordScore, fieldNumber: 7)
-    }
-    if self.exact != false {
-      try visitor.visitSingularBoolField(value: self.exact, fieldNumber: 8)
-    }
-    if self.startedAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.startedAt, fieldNumber: 9)
-    }
-    if self.endedAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.endedAt, fieldNumber: 10)
-    }
-    if self.ingestedAt != 0 {
-      try visitor.visitSingularInt64Field(value: self.ingestedAt, fieldNumber: 11)
-    }
-    if !self.heading.isEmpty {
-      try visitor.visitSingularStringField(value: self.heading, fieldNumber: 12)
-    }
-    if !self.trust.isEmpty {
-      try visitor.visitSingularStringField(value: self.trust, fieldNumber: 13)
-    }
-    if !self.space.isEmpty {
-      try visitor.visitSingularStringField(value: self.space, fieldNumber: 14)
-    }
-    if !self.tenant.isEmpty {
-      try visitor.visitSingularStringField(value: self.tenant, fieldNumber: 15)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._text.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._text, fieldNumber: 1)
+      }
+      if !_storage._sourceUri.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._sourceUri, fieldNumber: 2)
+      }
+      if !_storage._sourceType.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._sourceType, fieldNumber: 3)
+      }
+      if _storage._score.bitPattern != 0 {
+        try visitor.visitSingularFloatField(value: _storage._score, fieldNumber: 4)
+      }
+      if !_storage._scope.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._scope, fieldNumber: 5)
+      }
+      if !_storage._tags.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._tags, fieldNumber: 6)
+      }
+      if _storage._keywordScore.bitPattern != 0 {
+        try visitor.visitSingularFloatField(value: _storage._keywordScore, fieldNumber: 7)
+      }
+      if _storage._exact != false {
+        try visitor.visitSingularBoolField(value: _storage._exact, fieldNumber: 8)
+      }
+      if _storage._startedAt != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._startedAt, fieldNumber: 9)
+      }
+      if _storage._endedAt != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._endedAt, fieldNumber: 10)
+      }
+      if _storage._ingestedAt != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._ingestedAt, fieldNumber: 11)
+      }
+      if !_storage._heading.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._heading, fieldNumber: 12)
+      }
+      if !_storage._trust.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._trust, fieldNumber: 13)
+      }
+      if !_storage._space.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._space, fieldNumber: 14)
+      }
+      if !_storage._tenant.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._tenant, fieldNumber: 15)
+      }
+      if !_storage._collection.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._collection, fieldNumber: 16)
+      }
+      if !_storage._pointID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._pointID, fieldNumber: 17)
+      }
+      try { if let v = _storage._chunkIndex {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 18)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Orchd_V1_SearchHit, rhs: Orchd_V1_SearchHit) -> Bool {
-    if lhs.text != rhs.text {return false}
-    if lhs.sourceUri != rhs.sourceUri {return false}
-    if lhs.sourceType != rhs.sourceType {return false}
-    if lhs.score != rhs.score {return false}
-    if lhs.scope != rhs.scope {return false}
-    if lhs.tags != rhs.tags {return false}
-    if lhs.keywordScore != rhs.keywordScore {return false}
-    if lhs.exact != rhs.exact {return false}
-    if lhs.startedAt != rhs.startedAt {return false}
-    if lhs.endedAt != rhs.endedAt {return false}
-    if lhs.ingestedAt != rhs.ingestedAt {return false}
-    if lhs.heading != rhs.heading {return false}
-    if lhs.trust != rhs.trust {return false}
-    if lhs.space != rhs.space {return false}
-    if lhs.tenant != rhs.tenant {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._text != rhs_storage._text {return false}
+        if _storage._sourceUri != rhs_storage._sourceUri {return false}
+        if _storage._sourceType != rhs_storage._sourceType {return false}
+        if _storage._score != rhs_storage._score {return false}
+        if _storage._scope != rhs_storage._scope {return false}
+        if _storage._tags != rhs_storage._tags {return false}
+        if _storage._keywordScore != rhs_storage._keywordScore {return false}
+        if _storage._exact != rhs_storage._exact {return false}
+        if _storage._startedAt != rhs_storage._startedAt {return false}
+        if _storage._endedAt != rhs_storage._endedAt {return false}
+        if _storage._ingestedAt != rhs_storage._ingestedAt {return false}
+        if _storage._heading != rhs_storage._heading {return false}
+        if _storage._trust != rhs_storage._trust {return false}
+        if _storage._space != rhs_storage._space {return false}
+        if _storage._tenant != rhs_storage._tenant {return false}
+        if _storage._collection != rhs_storage._collection {return false}
+        if _storage._pointID != rhs_storage._pointID {return false}
+        if _storage._chunkIndex != rhs_storage._chunkIndex {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -6105,7 +6379,7 @@ nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._
 
 nonisolated extension Orchd_V1_ListSourcesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ListSourcesRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_type\0\u{1}scope\0\u{3}uri_prefix\0\u{1}limit\0\u{1}since\0\u{1}until\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_type\0\u{1}scope\0\u{3}uri_prefix\0\u{1}limit\0\u{1}since\0\u{1}until\0\u{1}collections\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6119,6 +6393,7 @@ nonisolated extension Orchd_V1_ListSourcesRequest: SwiftProtobuf.Message, SwiftP
       case 4: try { try decoder.decodeSingularInt32Field(value: &self.limit) }()
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.since) }()
       case 6: try { try decoder.decodeSingularInt64Field(value: &self.until) }()
+      case 7: try { try decoder.decodeRepeatedStringField(value: &self.collections) }()
       default: break
       }
     }
@@ -6143,6 +6418,9 @@ nonisolated extension Orchd_V1_ListSourcesRequest: SwiftProtobuf.Message, SwiftP
     if self.until != 0 {
       try visitor.visitSingularInt64Field(value: self.until, fieldNumber: 6)
     }
+    if !self.collections.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.collections, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -6153,6 +6431,221 @@ nonisolated extension Orchd_V1_ListSourcesRequest: SwiftProtobuf.Message, SwiftP
     if lhs.limit != rhs.limit {return false}
     if lhs.since != rhs.since {return false}
     if lhs.until != rhs.until {return false}
+    if lhs.collections != rhs.collections {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListCollectionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListCollectionsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListCollectionsRequest, rhs: Orchd_V1_ListCollectionsRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListCollectionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListCollectionsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}collections\0\u{3}spaces_on\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.collections) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.spacesOn) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.collections.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.collections, fieldNumber: 1)
+    }
+    if self.spacesOn != false {
+      try visitor.visitSingularBoolField(value: self.spacesOn, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListCollectionsResponse, rhs: Orchd_V1_ListCollectionsResponse) -> Bool {
+    if lhs.collections != rhs.collections {return false}
+    if lhs.spacesOn != rhs.spacesOn {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_CollectionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CollectionInfo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}space\0\u{1}chunks\0\u{1}hybrid\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.chunks) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.hybrid) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 2)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt64Field(value: self.chunks, fieldNumber: 3)
+    }
+    if self.hybrid != false {
+      try visitor.visitSingularBoolField(value: self.hybrid, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_CollectionInfo, rhs: Orchd_V1_CollectionInfo) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.space != rhs.space {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.hybrid != rhs.hybrid {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_BrowseChunksRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BrowseChunksRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}collections\0\u{3}source_type\0\u{1}scope\0\u{3}source_uri\0\u{1}tags\0\u{3}all_tags\0\u{1}since\0\u{1}until\0\u{1}limit\0\u{1}cursor\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.collections) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.sourceType) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.scope) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.sourceUri) }()
+      case 5: try { try decoder.decodeRepeatedStringField(value: &self.tags) }()
+      case 6: try { try decoder.decodeRepeatedStringField(value: &self.allTags) }()
+      case 7: try { try decoder.decodeSingularInt64Field(value: &self.since) }()
+      case 8: try { try decoder.decodeSingularInt64Field(value: &self.until) }()
+      case 9: try { try decoder.decodeSingularInt32Field(value: &self.limit) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.cursor) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.collections.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.collections, fieldNumber: 1)
+    }
+    if !self.sourceType.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceType, fieldNumber: 2)
+    }
+    if !self.scope.isEmpty {
+      try visitor.visitSingularStringField(value: self.scope, fieldNumber: 3)
+    }
+    if !self.sourceUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceUri, fieldNumber: 4)
+    }
+    if !self.tags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.tags, fieldNumber: 5)
+    }
+    if !self.allTags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.allTags, fieldNumber: 6)
+    }
+    if self.since != 0 {
+      try visitor.visitSingularInt64Field(value: self.since, fieldNumber: 7)
+    }
+    if self.until != 0 {
+      try visitor.visitSingularInt64Field(value: self.until, fieldNumber: 8)
+    }
+    if self.limit != 0 {
+      try visitor.visitSingularInt32Field(value: self.limit, fieldNumber: 9)
+    }
+    if !self.cursor.isEmpty {
+      try visitor.visitSingularStringField(value: self.cursor, fieldNumber: 10)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_BrowseChunksRequest, rhs: Orchd_V1_BrowseChunksRequest) -> Bool {
+    if lhs.collections != rhs.collections {return false}
+    if lhs.sourceType != rhs.sourceType {return false}
+    if lhs.scope != rhs.scope {return false}
+    if lhs.sourceUri != rhs.sourceUri {return false}
+    if lhs.tags != rhs.tags {return false}
+    if lhs.allTags != rhs.allTags {return false}
+    if lhs.since != rhs.since {return false}
+    if lhs.until != rhs.until {return false}
+    if lhs.limit != rhs.limit {return false}
+    if lhs.cursor != rhs.cursor {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_BrowseChunksResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BrowseChunksResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}hits\0\u{3}next_cursor\0\u{1}total\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.hits) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.nextCursor) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.total) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.hits.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.hits, fieldNumber: 1)
+    }
+    if !self.nextCursor.isEmpty {
+      try visitor.visitSingularStringField(value: self.nextCursor, fieldNumber: 2)
+    }
+    if self.total != 0 {
+      try visitor.visitSingularInt64Field(value: self.total, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_BrowseChunksResponse, rhs: Orchd_V1_BrowseChunksResponse) -> Bool {
+    if lhs.hits != rhs.hits {return false}
+    if lhs.nextCursor != rhs.nextCursor {return false}
+    if lhs.total != rhs.total {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

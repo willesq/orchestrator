@@ -24,6 +24,8 @@ const (
 	Orchd_Search_FullMethodName                   = "/orchd.v1.Orchd/Search"
 	Orchd_SearchDirectMessages_FullMethodName     = "/orchd.v1.Orchd/SearchDirectMessages"
 	Orchd_ListSources_FullMethodName              = "/orchd.v1.Orchd/ListSources"
+	Orchd_ListCollections_FullMethodName          = "/orchd.v1.Orchd/ListCollections"
+	Orchd_BrowseChunks_FullMethodName             = "/orchd.v1.Orchd/BrowseChunks"
 	Orchd_DeleteSource_FullMethodName             = "/orchd.v1.Orchd/DeleteSource"
 	Orchd_Dispatch_FullMethodName                 = "/orchd.v1.Orchd/Dispatch"
 	Orchd_ListTasks_FullMethodName                = "/orchd.v1.Orchd/ListTasks"
@@ -135,6 +137,14 @@ type OrchdClient interface {
 	// per-source chunk counts. This is the store's inventory, as opposed to the
 	// cadence-refresh registry that `orch source list` reports.
 	ListSources(ctx context.Context, in *ListSourcesRequest, opts ...grpc.CallOption) (*ListSourcesResponse, error)
+	// ListCollections names the vector-store collections the caller may read,
+	// with each one's chunk count: the base collection, and with spaces on each
+	// space's own. A migration's backup is never listed: it is not read.
+	ListCollections(ctx context.Context, in *ListCollectionsRequest, opts ...grpc.CallOption) (*ListCollectionsResponse, error)
+	// BrowseChunks pages through every stored chunk matching its filters,
+	// unranked and in storage order, so a client can reach the end of a set
+	// that a ranked search caps.
+	BrowseChunks(ctx context.Context, in *BrowseChunksRequest, opts ...grpc.CallOption) (*BrowseChunksResponse, error)
 	// DeleteSource removes every chunk belonging to one source_uri.
 	DeleteSource(ctx context.Context, in *DeleteSourceRequest, opts ...grpc.CallOption) (*DeleteSourceResponse, error)
 	// Dispatch enqueues a durable agent-task workflow and returns its instance ID.
@@ -492,6 +502,26 @@ func (c *orchdClient) ListSources(ctx context.Context, in *ListSourcesRequest, o
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListSourcesResponse)
 	err := c.cc.Invoke(ctx, Orchd_ListSources_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListCollections(ctx context.Context, in *ListCollectionsRequest, opts ...grpc.CallOption) (*ListCollectionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCollectionsResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListCollections_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) BrowseChunks(ctx context.Context, in *BrowseChunksRequest, opts ...grpc.CallOption) (*BrowseChunksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BrowseChunksResponse)
+	err := c.cc.Invoke(ctx, Orchd_BrowseChunks_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1408,6 +1438,14 @@ type OrchdServer interface {
 	// per-source chunk counts. This is the store's inventory, as opposed to the
 	// cadence-refresh registry that `orch source list` reports.
 	ListSources(context.Context, *ListSourcesRequest) (*ListSourcesResponse, error)
+	// ListCollections names the vector-store collections the caller may read,
+	// with each one's chunk count: the base collection, and with spaces on each
+	// space's own. A migration's backup is never listed: it is not read.
+	ListCollections(context.Context, *ListCollectionsRequest) (*ListCollectionsResponse, error)
+	// BrowseChunks pages through every stored chunk matching its filters,
+	// unranked and in storage order, so a client can reach the end of a set
+	// that a ranked search caps.
+	BrowseChunks(context.Context, *BrowseChunksRequest) (*BrowseChunksResponse, error)
 	// DeleteSource removes every chunk belonging to one source_uri.
 	DeleteSource(context.Context, *DeleteSourceRequest) (*DeleteSourceResponse, error)
 	// Dispatch enqueues a durable agent-task workflow and returns its instance ID.
@@ -1735,6 +1773,12 @@ func (UnimplementedOrchdServer) SearchDirectMessages(context.Context, *SearchDir
 }
 func (UnimplementedOrchdServer) ListSources(context.Context, *ListSourcesRequest) (*ListSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSources not implemented")
+}
+func (UnimplementedOrchdServer) ListCollections(context.Context, *ListCollectionsRequest) (*ListCollectionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCollections not implemented")
+}
+func (UnimplementedOrchdServer) BrowseChunks(context.Context, *BrowseChunksRequest) (*BrowseChunksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BrowseChunks not implemented")
 }
 func (UnimplementedOrchdServer) DeleteSource(context.Context, *DeleteSourceRequest) (*DeleteSourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteSource not implemented")
@@ -2107,6 +2151,42 @@ func _Orchd_ListSources_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).ListSources(ctx, req.(*ListSourcesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListCollections_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCollectionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListCollections(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListCollections_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListCollections(ctx, req.(*ListCollectionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_BrowseChunks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BrowseChunksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).BrowseChunks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_BrowseChunks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).BrowseChunks(ctx, req.(*BrowseChunksRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3714,6 +3794,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListSources",
 			Handler:    _Orchd_ListSources_Handler,
+		},
+		{
+			MethodName: "ListCollections",
+			Handler:    _Orchd_ListCollections_Handler,
+		},
+		{
+			MethodName: "BrowseChunks",
+			Handler:    _Orchd_BrowseChunks_Handler,
 		},
 		{
 			MethodName: "DeleteSource",
