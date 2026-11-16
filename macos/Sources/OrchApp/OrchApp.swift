@@ -82,7 +82,7 @@ final class AppModel {
         let tasks = TasksModel(api: api)
         self.monitor = monitor
         self.tasks = tasks
-        search = SearchModel(api: api)
+        search = SearchModel(api: api, paged: true)
         sources = SourcesModel(api: api)
         dispatch = DispatchModel(api: api) { await tasks.refresh() }
         restart = RestartModel(api: api) { await monitor.refresh() }

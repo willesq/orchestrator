@@ -102,11 +102,55 @@ orch search --uri repo://willesq/orchestrator/README.md "install"               
 orch search --ranking plain --per-source -1 "install"  # fusion order, no cap
 orch search --direct-messages "review my patch"       # chat DMs too (operator only; under a spaces policy use Orch.app, Memory → Direct messages); no other search returns them
 orch rag show repo://willesq/orchestrator/README.md   # the doc as memory holds it
+orch rag collections                                  # collections you can read, with chunk counts
+orch search --collection <collection> "install"       # search only one of them
+orch rag browse --type repo_doc --limit 100           # every repo doc chunk, page by page
+orch rag browse --type repo_doc --limit 100 --cursor <cursor>   # the next page
 ```
+
+`orch rag browse` lists every chunk the filters match, unranked and in storage order, so it
+reaches the end of a set that `orch search` stops at 100 results. The match count and the cursor
+for the next page are printed to stderr; pass the cursor back with the same filters. Within a
+collection the order is not chunk order. It reads what a search would (your spaces, never chat
+direct messages). `orch rag collections` lists the collections you can read: the base and, with
+spaces on, each space's; `--collection` on `search`, `rag sources` and `rag browse` narrows to
+some of them and never reaches a collection you cannot read.
 
 `orch rag show` rebuilds a source from its chunks: in order, without their section context
 lines, with the overlap between chunks trimmed. It is what retrieval sees, close to but not
 exactly the original.
+
+### In Orch.app
+
+The app's Memory pane has the same reads, as the operator (it sees every collection):
+
+- **Search** ranks up to 100 hits per search, as `orch search` does, and shows them a page at a
+  time (**Show** sets the page size; **Show 10 more** reveals the next page without searching
+  again, so the order never changes under you). **Relevance** hides hits below a score within
+  those 100. When a search returns the full 100, the footer says so: use Browse to see every
+  match.
+- **Browse** lists every chunk the filters match, unranked and in storage order, like
+  `orch rag browse`. The first page says how many match; **Load more**, or scrolling to the end,
+  loads the next, until the last page.
+- **Indexed** lists the stored sources with their chunk counts, by type and collection.
+- **Filters:** the **Collection** menu offers "All collections" and each collection with its chunk
+  count (and its space with spaces on; with spaces off there is one collection, named in its
+  place). **Type** and **Match** are menus too. Filters can also be typed into the field and
+  appear as removable chips: `type:repo_doc`, `repo:orchestrator` (the tag `repo:orchestrator`),
+  `tag:owner:willesq`, `collection:<name>`, `uri:session://…`, `scope:<scope>`,
+  `since:7d` (also `24h`, `2w`, `today`, `yesterday`, `2026-11-01`) and `until:2026-11-01` (to the
+  end of that day). Several `tag:` or `repo:` filters must all match, so each one narrows the results. Unknown `key:` words and
+  "quoted phrases" stay part of the search; a value that cannot be read is left out with a note.
+- **A result** shows its source with the repo it came from ("README.md · revok"), its type, the
+  section it came from, when it happened and when it was stored, and its score (hover for what
+  the score means). Selecting it shows every stored field: address, section, type, scope,
+  collection, space, trust, tenant, tags, dates, scores, point ID, chunk number and the full
+  text, with **Copy as JSON**, **Open whole source** (as `orch rag show` rebuilds it), **Search
+  within** and **Browse source**, and **Reveal in Finder** for a `file://` source or **Open** for
+  a web page.
+
+Stored text is shown as plain text, never rendered, and only `file://` and `http(s)` addresses
+open.
 
 ## Measuring retrieval
 

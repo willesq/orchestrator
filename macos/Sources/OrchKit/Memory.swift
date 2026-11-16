@@ -30,7 +30,8 @@ public enum SearchMode: String, Sendable, CaseIterable, Identifiable {
 public struct SearchQuery: Sendable, Equatable {
     /// orchd rejects anything above this.
     public static let maxResults = 100
-    /// The result counts the search view offers.
+    /// The result counts the search view offers; the Memory pane treats the
+    /// count as a page size.
     public static let limitChoices = [5, 10, 20, 50, 100]
 
     public var text: String
@@ -42,9 +43,18 @@ public struct SearchQuery: Sendable, Equatable {
     public var sourceURI: String
     /// Only content carrying every one of these tags, e.g. one repo's docs.
     public var allTags: [String]
+    /// Only content carrying any one of these tags.
+    public var tags: [String]
+    /// Only these collections, as ListCollections names them; empty reads
+    /// every collection the caller may read.
+    public var collections: [String]
+    /// Only content dated within these bounds, either open.
+    public var since: Date?
+    public var until: Date?
 
     public init(text: String, limit: Int = 10, sourceType: String = "", scope: String = "", mode: SearchMode = .configured,
-                sourceURI: String = "", allTags: [String] = []) {
+                sourceURI: String = "", allTags: [String] = [], tags: [String] = [], collections: [String] = [],
+                since: Date? = nil, until: Date? = nil) {
         self.text = text
         self.limit = limit
         self.sourceType = sourceType
@@ -52,6 +62,10 @@ public struct SearchQuery: Sendable, Equatable {
         self.mode = mode
         self.sourceURI = sourceURI
         self.allTags = allTags
+        self.tags = tags
+        self.collections = collections
+        self.since = since
+        self.until = until
     }
 
     /// The query as sent: trimmed text, trimmed filters, a limit in 1...maxResults.
@@ -63,7 +77,11 @@ public struct SearchQuery: Sendable, Equatable {
             scope: scope.trimmingCharacters(in: .whitespaces),
             mode: mode,
             sourceURI: sourceURI,
-            allTags: allTags.filter { !$0.isEmpty }
+            allTags: allTags.filter { !$0.isEmpty },
+            tags: tags.filter { !$0.isEmpty },
+            collections: collections.filter { !$0.isEmpty },
+            since: since,
+            until: until
         )
     }
 }
@@ -79,13 +97,30 @@ public struct SearchHit: Sendable, Equatable {
     public let keywordScore: Float
     public let exact: Bool
     public let tags: [String]
-    /// When what the hit describes happened, if known.
+    /// When what the hit describes happened (and ended), if known.
     public let startedAt: Date?
+    public let endedAt: Date?
     public let ingestedAt: Date?
+    /// The markdown section the chunk came from, if any.
+    public let heading: String
+    /// The trust tier orchd's writer gave it (repo, web, session, file,
+    /// client); empty for content stored before writers were recorded.
+    public let trust: String
+    /// The space it was stored in; empty with spaces off or no policy.
+    public let space: String
+    /// A chat chunk's tenant, "<system>:<tenant>"; empty for anything else.
+    public let tenant: String
+    /// The collection it was read from, its point there, and its place in
+    /// its source (nil when orchd did not say).
+    public let collection: String
+    public let pointID: String
+    public let chunkIndex: Int?
 
     public init(
         text: String, sourceURI: String, sourceType: String = "", scope: String = "", score: Float = 0,
-        keywordScore: Float = 0, exact: Bool = false, tags: [String] = [], startedAt: Date? = nil, ingestedAt: Date? = nil
+        keywordScore: Float = 0, exact: Bool = false, tags: [String] = [], startedAt: Date? = nil, endedAt: Date? = nil,
+        ingestedAt: Date? = nil, heading: String = "", trust: String = "", space: String = "", tenant: String = "",
+        collection: String = "", pointID: String = "", chunkIndex: Int? = nil
     ) {
         self.text = text
         self.sourceURI = sourceURI
@@ -96,7 +131,15 @@ public struct SearchHit: Sendable, Equatable {
         self.exact = exact
         self.tags = tags
         self.startedAt = startedAt
+        self.endedAt = endedAt
         self.ingestedAt = ingestedAt
+        self.heading = heading
+        self.trust = trust
+        self.space = space
+        self.tenant = tenant
+        self.collection = collection
+        self.pointID = pointID
+        self.chunkIndex = chunkIndex
     }
 
     /// A short name for where the hit came from: a file's name, a page's
@@ -138,10 +181,16 @@ public struct SearchResult: Sendable, Equatable {
     public let hits: [SearchHit]
     /// Why a hybrid search answered by meaning only; nil when it ran as asked.
     public let fallback: String?
+    /// The collections searched, and whether orchd narrowed them to the
+    /// caller's readable spaces (never for the operator, Orch.app).
+    public let collections: [String]
+    public let scoped: Bool
 
-    public init(hits: [SearchHit], fallback: String? = nil) {
+    public init(hits: [SearchHit], fallback: String? = nil, collections: [String] = [], scoped: Bool = false) {
         self.hits = hits
         self.fallback = fallback
+        self.collections = collections
+        self.scoped = scoped
     }
 }
 
@@ -178,10 +227,24 @@ public struct SourceList: Sendable, Equatable {
     }
 }
 
-/// Searching and listing durable memory.
+/// Searching, listing and browsing durable memory.
 public protocol MemoryAPI: Sendable {
     func search(_ query: SearchQuery) async throws -> SearchResult
-    func listSources(type: String, limit: Int) async throws -> SourceList
+    /// Stored sources of one type ("" for any), in `collections` (empty for
+    /// every readable one).
+    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList
+    /// The collections the app may read, and whether spaces are on.
+    func listCollections() async throws -> CollectionList
+    /// One page of every chunk matching `query`, unranked; `cursor` is the
+    /// previous page's `nextCursor`, or "" for the first.
+    func browseChunks(_ query: BrowseQuery, cursor: String) async throws -> BrowsePage
+}
+
+extension MemoryAPI {
+    /// Sources across every readable collection.
+    public func listSources(type: String, limit: Int) async throws -> SourceList {
+        try await listSources(type: type, limit: limit, collections: [])
+    }
 }
 
 /// Restarting supervised orchd units in place.
