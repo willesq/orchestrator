@@ -356,7 +356,8 @@ private final class TypedMemory: MemoryAPI, @unchecked Sendable {
         SearchResult(hits: [SearchHit(text: query.text, sourceURI: "x")])
     }
 
-    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList {
+    func listSources(_ query: SourcesQuery) async throws -> SourceList {
+        let type = query.sourceType
         let all = [SourceSummary(uri: "a", sourceType: "web"), SourceSummary(uri: "b", sourceType: "repo_doc"),
                    SourceSummary(uri: "c")]
         let kept = type.isEmpty ? all : all.filter { $0.sourceType == type }

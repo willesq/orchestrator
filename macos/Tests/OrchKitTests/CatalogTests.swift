@@ -73,7 +73,7 @@ private final class FakeCatalog: CatalogAPI, MemoryAPI, @unchecked Sendable {
         return SearchResult(hits: [], fallback: nil)
     }
 
-    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList { SourceList(sources: [], totalSources: 0, totalChunks: 0) }
+    func listSources(_ query: SourcesQuery) async throws -> SourceList { SourceList(sources: [], totalSources: 0, totalChunks: 0) }
     func listCollections() async throws -> CollectionList { CollectionList(collections: [], spacesOn: false) }
     func browseChunks(_ query: BrowseQuery, cursor: String) async throws -> BrowsePage { BrowsePage(hits: []) }
 }
@@ -489,7 +489,7 @@ private final class SlowSources: CatalogAPI, MemoryAPI, @unchecked Sendable {
     func removeSource(id: String, purge: Bool) async throws -> PurgeResult { throw Down() }
     func refreshSource(id: String?) async throws {}
     func search(_ query: SearchQuery) async throws -> SearchResult { SearchResult(hits: [], fallback: nil) }
-    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList { SourceList(sources: [], totalSources: 0, totalChunks: 0) }
+    func listSources(_ query: SourcesQuery) async throws -> SourceList { SourceList(sources: [], totalSources: 0, totalChunks: 0) }
     func listCollections() async throws -> CollectionList { CollectionList(collections: [], spacesOn: false) }
     func browseChunks(_ query: BrowseQuery, cursor: String) async throws -> BrowsePage { BrowsePage(hits: []) }
 }

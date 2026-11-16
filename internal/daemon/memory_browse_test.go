@@ -243,6 +243,16 @@ func TestSearchAndListSourcesPassCollections(t *testing.T) {
 	if !slices.Equal(fr.sources.Collections, []string{"c", "c__a"}) {
 		t.Fatalf("list collections = %v", fr.sources.Collections)
 	}
+	if _, err := s.ListSources(ctx, &orchdv1.ListSourcesRequest{Tags: []string{"any"}, AllTags: []string{"repo:r", "owner:o"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(fr.sources.Tags, []string{"any"}) || !slices.Equal(fr.sources.AllTags, []string{"repo:r", "owner:o"}) {
+		t.Fatalf("list tags = %v, all tags = %v", fr.sources.Tags, fr.sources.AllTags)
+	}
+	tooMany := make([]string, maxFilterTags+1)
+	if _, err := s.ListSources(ctx, &orchdv1.ListSourcesRequest{AllTags: tooMany}); grpcstatus.Code(err) != codes.InvalidArgument {
+		t.Fatalf("too many tags: err = %v, want InvalidArgument", err)
+	}
 }
 
 // TestBrowseKeepsSpacesApart: a session browses and lists only its readable

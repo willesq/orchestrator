@@ -32,14 +32,20 @@ private let sampleHits = [
 
 private struct Sample: MemoryAPI {
     let spacesOn: Bool
+    var failCollections = false
 
     func search(_ query: SearchQuery) async throws -> SearchResult { SearchResult(hits: sampleHits) }
-    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList {
-        SourceList(sources: [SourceSummary(uri: "a", sourceType: "repo_doc"), SourceSummary(uri: "b", sourceType: "web")],
-                   totalSources: 2, totalChunks: 9)
+    func listSources(_ query: SourcesQuery) async throws -> SourceList {
+        SourceList(sources: [
+            SourceSummary(uri: "repo://example/orchestrator/README.md", sourceType: "repo_doc", scope: "example/orchestrator",
+                          chunks: 12, ingestedAt: Date(timeIntervalSince1970: 1_794_000_000)),
+            SourceSummary(uri: "repo://example/revok/README.md", sourceType: "repo_doc", scope: "example/revok", chunks: 4,
+                          ingestedAt: Date(timeIntervalSince1970: 1_793_500_000)),
+        ], totalSources: query.limit == 0 ? 2 : 37, totalChunks: 412)
     }
     func listCollections() async throws -> CollectionList {
-        spacesOn
+        if failCollections { throw CancellationError() }
+        return spacesOn
             ? CollectionList(collections: [CollectionInfo(name: "orch-base", chunks: 63_012, hybrid: true),
                                            CollectionInfo(name: "orch-work", space: "work", chunks: 1_204, hybrid: true)],
                              spacesOn: true)
@@ -92,6 +98,50 @@ struct MemorySnapshots {
         await collections.refresh()
         try await renderBoth(SearchPane(model: search, sources: sources, collections: collections, actions: HitActions()),
                              size: NSSize(width: 790, height: 520), name: "memory-search-results", dir: dir)
+    }
+
+    /// The Collection menu stays a menu with spaces off, saying why it holds
+    /// one collection, and warns when the list could not load.
+    @Test func collectionPicker() async throws {
+        let dir = try outputDir()
+        for (name, api) in [("spaces-on", Sample(spacesOn: true)), ("spaces-off", Sample(spacesOn: false)),
+                            ("unavailable", Sample(spacesOn: false, failCollections: true))] {
+            let collections = CollectionsModel(api: api)
+            await collections.refresh()
+            try await renderBoth(CollectionPicker(model: collections, selection: .constant("")).fixedSize().padding(12),
+                                 size: NSSize(width: 600, height: 48), name: "memory-collection-picker-\(name)", dir: dir)
+        }
+    }
+
+    /// Indexed: the shared filter bar with Limit, the count of what is
+    /// listed, and the table.
+    @Test func indexed() async throws {
+        let dir = try outputDir()
+        let api = Sample(spacesOn: false)
+        let collections = CollectionsModel(api: api)
+        await collections.refresh()
+        let sources = SourcesModel(api: api)
+        sources.filterText = "uri:repo:// repo:orchestrator since:30d stray"
+        sources.limit = 50
+        await sources.refresh()
+        let actions = HitActions(openSource: { _ in }, searchWithin: { _ in }, browseWithin: { _ in })
+        try await renderBoth(SourcesPane(model: sources, collections: collections, actions: actions),
+                             size: NSSize(width: 790, height: 420), name: "memory-indexed", dir: dir)
+    }
+
+    /// Browse with the shared bar, spaces off.
+    @Test func browse() async throws {
+        let dir = try outputDir()
+        let api = Sample(spacesOn: false)
+        let collections = CollectionsModel(api: api)
+        await collections.refresh()
+        let sources = SourcesModel(api: api)
+        await sources.refresh()
+        let browse = BrowseModel(api: api)
+        browse.filterText = "type:repo_doc"
+        await browse.load()
+        try await renderBoth(BrowsePane(model: browse, sources: sources, collections: collections, actions: HitActions()),
+                             size: NSSize(width: 790, height: 420), name: "memory-browse", dir: dir)
     }
 
     private func outputDir() throws -> URL {

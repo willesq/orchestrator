@@ -17,6 +17,7 @@ type inventoryStub struct {
 	count      int
 	countErr   bool
 	deletes    []map[string]any
+	scrolls    []map[string]any
 	scrollCall int
 }
 
@@ -25,6 +26,11 @@ func newInventoryStore(t *testing.T, st *inventoryStub) *QdrantStore {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/points/scroll"):
+			var body struct {
+				Filter map[string]any `json:"filter"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			st.scrolls = append(st.scrolls, body.Filter)
 			i := st.scrollCall
 			st.scrollCall++
 			var pts []map[string]any
@@ -355,5 +361,22 @@ func TestListSourcesStopsOnANonAdvancingCursor(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "did not advance") {
 		t.Errorf("error %q should name the stuck cursor", err)
+	}
+}
+
+func TestListSourcesFiltersOnTags(t *testing.T) {
+	st := &inventoryStub{pages: [][]map[string]any{{point("a://1", "manual")}}}
+	svc := NewService(fakeEmbedder{dim: 3, vec: []float32{1, 0, 0}}, newInventoryStore(t, st), 100, 10)
+	if _, _, _, err := svc.ListSources(context.Background(), ListSourcesOpts{Tags: []string{"any-tag"}, AllTags: []string{"repo:r"}}); err != nil {
+		t.Fatalf("ListSources: %v", err)
+	}
+	if len(st.scrolls) == 0 {
+		t.Fatal("no scroll was sent")
+	}
+	raw, _ := json.Marshal(st.scrolls[0])
+	for _, want := range []string{`"tags"`, `"any-tag"`, `"repo:r"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("scroll filter %s lacks %s", raw, want)
+		}
 	}
 }

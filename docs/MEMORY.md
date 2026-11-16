@@ -114,7 +114,8 @@ for the next page are printed to stderr; pass the cursor back with the same filt
 collection the order is not chunk order. It reads what a search would (your spaces, never chat
 direct messages). `orch rag collections` lists the collections you can read: the base and, with
 spaces on, each space's; `--collection` on `search`, `rag sources` and `rag browse` narrows to
-some of them and never reaches a collection you cannot read.
+some of them and never reaches a collection you cannot read. `orch rag sources` takes the same
+`--tag` (any of) and `--require-tag` (every one) filters as `orch search`.
 
 `orch rag show` rebuilds a source from its chunks: in order, without their section context
 lines, with the overlap between chunks trimmed. It is what retrieval sees, close to but not
@@ -132,15 +133,25 @@ The app's Memory pane has the same reads, as the operator (it sees every collect
 - **Browse** lists every chunk the filters match, unranked and in storage order, like
   `orch rag browse`. The first page says how many match; **Load more**, or scrolling to the end,
   loads the next, until the last page.
-- **Indexed** lists the stored sources with their chunk counts, by type and collection.
-- **Filters:** the **Collection** menu offers "All collections" and each collection with its chunk
-  count (and its space with spaces on; with spaces off there is one collection, named in its
-  place). **Type** and **Match** are menus too. Filters can also be typed into the field and
+- **Indexed** lists the stored sources with their chunk counts. **Limit** lists 50, 200, 1000 or
+  **All** of them, and the line above the list says how many of how many are shown. Selecting a
+  source offers **Open whole source**, **Browse this source** and **Search within this source**.
+- **Direct messages** searches chat, direct messages included, with the same filters as Search
+  (Type starts at chat), the same paging and the same detail view, which shows each result's
+  tenant and space. Only Orch.app may run it.
+- **Filters:** every tab has the same filter bar. The **Collection** menu offers "All
+  collections" and each collection with its chunk count (and its space with spaces on); it stays a
+  menu with spaces off, where it holds the one collection there is. **Type** is a menu on every
+  tab, **Match** and **Relevance** on the ranked tabs (Search and Direct messages). Filters can
+  also be typed into the field on any tab and
   appear as removable chips: `type:repo_doc`, `repo:orchestrator` (the tag `repo:orchestrator`),
   `tag:owner:willesq`, `collection:<name>`, `uri:session://…`, `scope:<scope>`,
   `since:7d` (also `24h`, `2w`, `today`, `yesterday`, `2026-11-01`) and `until:2026-11-01` (to the
   end of that day). Several `tag:` or `repo:` filters must all match, so each one narrows the results. Unknown `key:` words and
   "quoted phrases" stay part of the search; a value that cannot be read is left out with a note.
+  Browse and Indexed list by filters only, so words there are ignored with a note, and in Indexed
+  `uri:` matches every source whose address starts with it (`uri:session://`). The **?** beside
+  the field lists what each tab takes.
 - **A result** shows its source with the repo it came from ("README.md · revok"), its type, the
   section it came from, when it happened and when it was stored, and its score (hover for what
   the score means). Selecting it shows every stored field: address, section, type, scope,

@@ -402,6 +402,9 @@ var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListSources_FullMethodName,
 	spaceDecision{spaceFiltered, "memory inventory, listed only from the caller's readable spaces"}))
 
 func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesRequest) (*orchdv1.ListSourcesResponse, error) {
+	if err := checkTags(req.GetTags(), req.GetAllTags()); err != nil {
+		return nil, err
+	}
 	if err := checkCollections(req.GetCollections()); err != nil {
 		return nil, err
 	}
@@ -420,6 +423,8 @@ func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesReques
 		Range:      tr,
 		// Narrows as a search's collections do.
 		Collections: req.GetCollections(),
+		Tags:        req.GetTags(),
+		AllTags:     req.GetAllTags(),
 	})
 	if err != nil {
 		return nil, scope.storeError("ListSources", err)

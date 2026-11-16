@@ -317,6 +317,12 @@ public nonisolated struct Orchd_V1_ListSourcesRequest: Sendable {
   /// optional: only these collections; narrows as SearchRequest.collections
   public var collections: [String] = []
 
+  /// optional: only sources with chunks whose payload.tags contain any of
+  /// tags and every one of all_tags, as SearchRequest's
+  public var tags: [String] = []
+
+  public var allTags: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -6379,7 +6385,7 @@ nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._
 
 nonisolated extension Orchd_V1_ListSourcesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ListSourcesRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_type\0\u{1}scope\0\u{3}uri_prefix\0\u{1}limit\0\u{1}since\0\u{1}until\0\u{1}collections\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_type\0\u{1}scope\0\u{3}uri_prefix\0\u{1}limit\0\u{1}since\0\u{1}until\0\u{1}collections\0\u{1}tags\0\u{3}all_tags\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6394,6 +6400,8 @@ nonisolated extension Orchd_V1_ListSourcesRequest: SwiftProtobuf.Message, SwiftP
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.since) }()
       case 6: try { try decoder.decodeSingularInt64Field(value: &self.until) }()
       case 7: try { try decoder.decodeRepeatedStringField(value: &self.collections) }()
+      case 8: try { try decoder.decodeRepeatedStringField(value: &self.tags) }()
+      case 9: try { try decoder.decodeRepeatedStringField(value: &self.allTags) }()
       default: break
       }
     }
@@ -6421,6 +6429,12 @@ nonisolated extension Orchd_V1_ListSourcesRequest: SwiftProtobuf.Message, SwiftP
     if !self.collections.isEmpty {
       try visitor.visitRepeatedStringField(value: self.collections, fieldNumber: 7)
     }
+    if !self.tags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.tags, fieldNumber: 8)
+    }
+    if !self.allTags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.allTags, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -6432,6 +6446,8 @@ nonisolated extension Orchd_V1_ListSourcesRequest: SwiftProtobuf.Message, SwiftP
     if lhs.since != rhs.since {return false}
     if lhs.until != rhs.until {return false}
     if lhs.collections != rhs.collections {return false}
+    if lhs.tags != rhs.tags {return false}
+    if lhs.allTags != rhs.allTags {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -693,7 +693,11 @@ type ListSourcesRequest struct {
 	Since int64 `protobuf:"varint,5,opt,name=since,proto3" json:"since,omitempty"`
 	Until int64 `protobuf:"varint,6,opt,name=until,proto3" json:"until,omitempty"`
 	// optional: only these collections; narrows as SearchRequest.collections
-	Collections   []string `protobuf:"bytes,7,rep,name=collections,proto3" json:"collections,omitempty"`
+	Collections []string `protobuf:"bytes,7,rep,name=collections,proto3" json:"collections,omitempty"`
+	// optional: only sources with chunks whose payload.tags contain any of
+	// tags and every one of all_tags, as SearchRequest's
+	Tags          []string `protobuf:"bytes,8,rep,name=tags,proto3" json:"tags,omitempty"`
+	AllTags       []string `protobuf:"bytes,9,rep,name=all_tags,json=allTags,proto3" json:"all_tags,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -773,6 +777,20 @@ func (x *ListSourcesRequest) GetUntil() int64 {
 func (x *ListSourcesRequest) GetCollections() []string {
 	if x != nil {
 		return x.Collections
+	}
+	return nil
+}
+
+func (x *ListSourcesRequest) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
+}
+
+func (x *ListSourcesRequest) GetAllTags() []string {
+	if x != nil {
+		return x.AllTags
 	}
 	return nil
 }
@@ -16996,7 +17014,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\bpoint_id\x18\x11 \x01(\tR\apointId\x12$\n" +
 	"\vchunk_index\x18\x12 \x01(\x05H\x00R\n" +
 	"chunkIndex\x88\x01\x01B\x0e\n" +
-	"\f_chunk_index\"\xce\x01\n" +
+	"\f_chunk_index\"\xfd\x01\n" +
 	"\x12ListSourcesRequest\x12\x1f\n" +
 	"\vsource_type\x18\x01 \x01(\tR\n" +
 	"sourceType\x12\x14\n" +
@@ -17006,7 +17024,9 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x14\n" +
 	"\x05since\x18\x05 \x01(\x03R\x05since\x12\x14\n" +
 	"\x05until\x18\x06 \x01(\x03R\x05until\x12 \n" +
-	"\vcollections\x18\a \x03(\tR\vcollections\"\x18\n" +
+	"\vcollections\x18\a \x03(\tR\vcollections\x12\x12\n" +
+	"\x04tags\x18\b \x03(\tR\x04tags\x12\x19\n" +
+	"\ball_tags\x18\t \x03(\tR\aallTags\"\x18\n" +
 	"\x16ListCollectionsRequest\"r\n" +
 	"\x17ListCollectionsResponse\x12:\n" +
 	"\vcollections\x18\x01 \x03(\v2\x18.orchd.v1.CollectionInfoR\vcollections\x12\x1b\n" +

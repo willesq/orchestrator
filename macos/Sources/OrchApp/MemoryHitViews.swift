@@ -81,6 +81,10 @@ struct HitInspector: View {
     let actions: HitActions
     /// Whether the hit came from a ranked search, so its scores mean something.
     var ranked = true
+    /// A chat direct message: its copy stays on this Mac and is marked
+    /// concealed and transient for clipboard managers, and its address
+    /// is not opened in a browser, which would keep it in its history.
+    var sensitive = false
 
     var body: some View {
         ScrollView {
@@ -136,8 +140,7 @@ struct HitInspector: View {
     private var buttons: some View {
         FlowLayout(spacing: 8) {
             Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(hit.json, forType: .string)
+                copyJSON()
             } label: { Label("Copy as JSON", systemImage: "curlybraces") }
                 .help("Copy every field of this result")
             if let open = actions.openSource {
@@ -155,14 +158,26 @@ struct HitInspector: View {
             switch hit.sourceLink {
             case .file(let url)?:
                 Button { reveal(url) } label: { Label("Reveal in Finder", systemImage: "folder") }
-            case .web(let url)?:
+            case .web(let url)? where !sensitive:
                 Button { open(url) } label: { Label("Open", systemImage: "arrow.up.right.square") }
                     .help(url.absoluteString)
-            case nil:
+            case .web?, nil:
                 EmptyView()
             }
         }
         .controlSize(.small)
+    }
+
+    private func copyJSON() {
+        let board = NSPasteboard.general
+        // currentHostOnly keeps a direct message off Universal Clipboard.
+        board.prepareForNewContents(with: sensitive ? .currentHostOnly : [])
+        board.setString(hit.json, forType: .string)
+        if sensitive {
+            // The nspasteboard.org markers clipboard tools honour.
+            board.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+            board.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+        }
     }
 
     /// Checked again at the click, so only a file:// path is revealed.

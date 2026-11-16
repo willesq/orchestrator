@@ -445,6 +445,10 @@ message ListSourcesRequest {
   int64 until = 6;
   // optional: only these collections; narrows as SearchRequest.collections
   repeated string collections = 7;
+  // optional: only sources with chunks whose payload.tags contain any of
+  // tags and every one of all_tags, as SearchRequest's
+  repeated string tags = 8;
+  repeated string all_tags = 9;
 }
 
 message ListCollectionsRequest {}
