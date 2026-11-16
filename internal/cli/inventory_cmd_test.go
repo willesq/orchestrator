@@ -198,3 +198,16 @@ func TestFirstLine(t *testing.T) {
 		})
 	}
 }
+
+func TestRAGSourcesSendsTagFilters(t *testing.T) {
+	fc := &fakeClient{listSources: &orchdv1.ListSourcesResponse{}}
+	if _, err := run(factory(fc, nil), "", "rag", "sources", "--tag", "a", "--tag", "b", "--require-tag", "repo:r"); err != nil {
+		t.Fatal(err)
+	}
+	if got := fc.listReq.GetTags(); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("tags = %v", got)
+	}
+	if got := fc.listReq.GetAllTags(); len(got) != 1 || got[0] != "repo:r" {
+		t.Errorf("all tags = %v", got)
+	}
+}

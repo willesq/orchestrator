@@ -34,6 +34,8 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 		since       string
 		until       string
 		collections []string
+		tags        []string
+		allTags     []string
 	)
 	cmd := &cobra.Command{
 		Use:   "sources",
@@ -59,6 +61,8 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 				Since:       from,
 				Until:       to,
 				Collections: collections,
+				Tags:        tags,
+				AllTags:     allTags,
 			})
 			if err != nil {
 				return err
@@ -96,6 +100,8 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().IntVar(&limit, "limit", 50, "max sources to show (0 for all)")
 	addBoundFlags(cmd, &since, &until)
 	addCollectionFlag(cmd, &collections)
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter: sources with any of these tags")
+	cmd.Flags().StringSliceVar(&allTags, "require-tag", nil, "filter: sources with every one of these tags")
 	return cmd
 }
 

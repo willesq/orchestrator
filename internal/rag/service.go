@@ -518,6 +518,9 @@ type ListSourcesOpts struct {
 	LabelsV int64
 	// Collections narrows as SearchOpts.Collections.
 	Collections []string
+	// Tags and AllTags keep only sources with chunks whose tags contain any
+	// of Tags and every one of AllTags, as SearchOpts's.
+	Tags, AllTags []string
 }
 
 // ListSources enumerates distinct sources in the store with their chunk counts.
@@ -529,6 +532,9 @@ type ListSourcesOpts struct {
 // Returns the (possibly limited) summaries, the distinct source count before
 // the limit, and the total chunks across them.
 func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]SourceSummary, int, int, error) {
+	if len(opts.Tags) > 0 || len(opts.AllTags) > 0 || opts.SourceType != "" {
+		s.ensureSearchIndexes()
+	}
 	must := map[string]string{}
 	if opts.Scope != "" {
 		must["scope"] = opts.Scope
@@ -549,7 +555,7 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 	stores = withLabels(onlyCollections(stores, opts.Collections), opts.LabelsV)
 	for _, ss := range stores {
 		st := ss.st
-		filter := buildFilter(ss.must(must), nil, nil, opts.Range)
+		filter := buildFilter(ss.must(must), opts.Tags, opts.AllTags, opts.Range)
 		var offset any
 		// A server that returns a non-advancing cursor would otherwise spin forever:
 		// the per-request timeout bounds each call but not the loop.
