@@ -73,48 +73,6 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         )
     }
 
-    public func search(_ query: SearchQuery) async throws -> SearchResult {
-        let q = query.normalized
-        var request = Orchd_V1_SearchRequest()
-        request.query = q.text
-        request.topK = Int32(q.limit)
-        request.sourceType = q.sourceType
-        request.scope = q.scope
-        request.mode = q.mode.rawValue
-        request.sourceUri = q.sourceURI
-        request.allTags = q.allTags
-        var options = CallOptions.defaults
-        options.timeout = searchTimeout
-        let response = try await orchd.search(request, options: options)
-        return SearchResult(
-            hits: response.hits.map {
-                SearchHit(
-                    text: $0.text, sourceURI: $0.sourceUri, sourceType: $0.sourceType, scope: $0.scope,
-                    score: $0.score, keywordScore: $0.keywordScore, exact: $0.exact, tags: $0.tags,
-                    startedAt: date(fromUnix: $0.startedAt), ingestedAt: date(fromUnix: $0.ingestedAt)
-                )
-            },
-            fallback: response.fallback.isEmpty ? nil : response.fallback
-        )
-    }
-
-    public func listSources(type: String, limit: Int) async throws -> SourceList {
-        var request = Orchd_V1_ListSourcesRequest()
-        request.sourceType = type
-        request.limit = Int32(clamping: max(limit, 0))
-        let response = try await orchd.listSources(request, options: callOptions)
-        return SourceList(
-            sources: response.sources.map {
-                SourceSummary(
-                    uri: $0.sourceUri, sourceType: $0.sourceType, scope: $0.scope, chunks: Int($0.chunks),
-                    tags: $0.tags, ingestedAt: date(fromUnix: $0.ingestedAt)
-                )
-            },
-            totalSources: Int(response.totalSources),
-            totalChunks: Int(response.totalChunks)
-        )
-    }
-
     public func restart(_ name: String?) async throws -> [String] {
         var request = Orchd_V1_RestartRequest()
         request.name = name ?? ""

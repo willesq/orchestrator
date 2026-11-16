@@ -606,3 +606,24 @@ func checkTags(lists ...[]string) error {
 	}
 	return nil
 }
+
+// Bounds on a request's collection filter and browse cursor, so a caller
+// cannot make each read match a huge list against every collection.
+const (
+	maxFilterCollections   = 64
+	maxFilterCollectionLen = 255
+	maxBrowseCursorLen     = 1024
+)
+
+// checkCollections bounds a read's collection filter.
+func checkCollections(names []string) error {
+	if len(names) > maxFilterCollections {
+		return grpcstatus.Errorf(codes.InvalidArgument, "at most %d collections per filter", maxFilterCollections)
+	}
+	for _, n := range names {
+		if len(n) > maxFilterCollectionLen {
+			return grpcstatus.Errorf(codes.InvalidArgument, "collection names are at most %d bytes", maxFilterCollectionLen)
+		}
+	}
+	return nil
+}

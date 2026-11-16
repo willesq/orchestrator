@@ -379,7 +379,10 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
    collection of the base (the base and each space's), as search did before SP-024; orchd
    decides each caller's readable spaces (SP-025, [Spaces](#spaces)). If the listing fails, a `nil` search reads the base
    alone. Collections not created yet are left out when there are several; hybrid search runs
-   only when every remaining one is hybrid.
+   only when every remaining one is hybrid. `SearchOpts.Collections` (and
+   `ListSourcesOpts.Collections`) then keeps only the chosen collections it names: it narrows
+   what the spaces chose and never adds one, so a name outside them is ignored and a list
+   matching none reads nothing.
 1. TopK 1–100 (0 → 5). Embed the query once. Filters: `scope` and `source_type` (exact), `tags`
    (any), and a time range: `ended_at ≥ since` and `started_at ≤ until` (overlap; undated content
    never matches a range).
@@ -427,7 +430,40 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
    logs are limited to one a minute.
 
 Scores keep cosine meaning in both modes, so relevance floors (prompt context) work unchanged:
-weighting and the cap change the order, never a hit's score. Hits also carry their `heading`.
+weighting and the cap change the order, never a hit's score. Hits also carry their `heading`,
+the `Collection` they were read from, their `PointID` there, and `ChunkIndex` (the payload's
+`chunk_index`; nil when a point has none).
+
+### Browsing and listing collections
+
+`Service.ListCollections(ListCollectionsOpts{Spaces, LabelsV, Hide})` names the collections a
+read for those spaces reaches (as `ListSources` chooses them: `nil` is every collection under
+the base, the base first) that exist, each with its space (`""` for the base), whether it is
+hybrid, and its chunk count. The count is one exact `POST /points/count` per collection with
+the read's own filter (the space and `labels_v` second layer, direct messages left out), so it
+is what a browse of that collection totals, not the raw point count. The base comes first, the
+rest by name. A running migration's shadow and every collection named in `Hide` (orchd passes
+`rag.qdrant.backup_collection`), with the space collections named after them, are never listed:
+no read answers from them.
+
+`Service.Browse(BrowseOpts)` pages through every chunk matching the same filters a search takes
+(scope, source type, source URI, any tags, every tag, time range, `Collections`), unranked, for
+a client that must reach the end of a set a ranked search caps at 100. Targets come from the
+spaces as for `ListSources`; each is read with the same second layer as a search (payload
+`space`, `labels_v`), and chat direct messages are always left out (SP-060, D-19: there is no
+browse equivalent of `SearchDirectMessages`). Each page scrolls the targets in order
+(`POST /points/scroll`, payload only, no vectors), asking for one point more than it needs: that
+point, in the same collection or the next non-empty one, is where the next page starts, so the
+last page's cursor is empty rather than leading to an empty page. A page may end in one
+collection and the next start in another. Within a collection the order is Qdrant's point-id
+order, which for orch's UUID ids is not chunk order.
+
+The cursor is base64url JSON `{"c": collection, "o": point id}`, opaque to clients and valid only
+with the same filters. A malformed cursor, or one naming a collection this browse does not read,
+fails with `ErrBadCursor`. The page size is 1–200 (0 or less is 50). `total` is the sum of exact
+counts across the targets with the browse's filter, computed only on the first page (no cursor).
+During a store move of the spaces switch a source can briefly be in two collections, and a
+browse then lists both copies (a search keeps the first).
 
 **Tuning** used the golden set's `tune` split only (70 cases), on a read-only copy of the store,
 and the defaults were judged on the `holdout` split (92 cases). Decision cases accept any source
@@ -1035,7 +1071,8 @@ never another isolated space or quarantine. Every write is stamped with its orig
 
 orchd gives every memory read the caller's readable spaces (SP-025; who reads what is in
 [daemon.md](daemon.md#reading-memory-by-space)): `Search` sets `SearchOpts.Spaces`,
-`ListSources` sets `ListSourcesOpts.Spaces`, and `GetDocument` reads with
+`ListSources` sets `ListSourcesOpts.Spaces`, `ListCollections` and `BrowseChunks` set
+`ListCollectionsOpts.Spaces` and `BrowseOpts.Spaces`, and `GetDocument` reads with
 `Service.DocumentIn(uri, spaces, labelsV)`. Each takes the spaces as search does: `nil` reads
 every collection, an empty list nothing, and a named space only its own collection, filtered on
 payload `space` as the second layer. For a filtered reader orchd also passes the applied

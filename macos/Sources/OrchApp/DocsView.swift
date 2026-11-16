@@ -282,7 +282,7 @@ private struct DocumentBody: View {
 }
 
 /// A doc's text as its source: plain monospaced, nothing interpreted.
-private func plainSource(_ text: String) -> NSAttributedString {
+func plainSource(_ text: String) -> NSAttributedString {
     NSAttributedString(string: text, attributes: [
         .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
         .foregroundColor: NSColor.labelColor,

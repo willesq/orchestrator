@@ -356,12 +356,15 @@ private final class TypedMemory: MemoryAPI, @unchecked Sendable {
         SearchResult(hits: [SearchHit(text: query.text, sourceURI: "x")])
     }
 
-    func listSources(type: String, limit: Int) async throws -> SourceList {
+    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList {
         let all = [SourceSummary(uri: "a", sourceType: "web"), SourceSummary(uri: "b", sourceType: "repo_doc"),
                    SourceSummary(uri: "c")]
         let kept = type.isEmpty ? all : all.filter { $0.sourceType == type }
         return SourceList(sources: kept, totalSources: kept.count, totalChunks: 0)
     }
+
+    func listCollections() async throws -> CollectionList { CollectionList(collections: [], spacesOn: false) }
+    func browseChunks(_ query: BrowseQuery, cursor: String) async throws -> BrowsePage { BrowsePage(hits: []) }
 }
 
 @MainActor

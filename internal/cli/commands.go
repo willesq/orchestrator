@@ -526,18 +526,19 @@ func newDispatchCmd(cf clientFactory) *cobra.Command {
 
 func newSearchCmd(cf clientFactory) *cobra.Command {
 	var (
-		topK       int
-		scope      string
-		sourceType string
-		tags       []string
-		allTags    []string
-		uri        string
-		mode       string
-		ranking    string
-		perSource  int
-		since      string
-		until      string
-		dms        bool
+		topK        int
+		scope       string
+		sourceType  string
+		tags        []string
+		allTags     []string
+		uri         string
+		mode        string
+		ranking     string
+		perSource   int
+		since       string
+		until       string
+		dms         bool
+		collections []string
 	)
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -560,18 +561,19 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			req := &orchdv1.SearchRequest{
-				Query:      query,
-				TopK:       int32(topK),
-				Scope:      scope,
-				SourceType: sourceType,
-				Tags:       tags,
-				AllTags:    allTags,
-				SourceUri:  uri,
-				Mode:       mode,
-				Ranking:    ranking,
-				PerSource:  int32(perSource),
-				Since:      from,
-				Until:      to,
+				Query:       query,
+				TopK:        int32(topK),
+				Scope:       scope,
+				SourceType:  sourceType,
+				Tags:        tags,
+				AllTags:     allTags,
+				SourceUri:   uri,
+				Mode:        mode,
+				Ranking:     ranking,
+				PerSource:   int32(perSource),
+				Since:       from,
+				Until:       to,
+				Collections: collections,
 			}
 			var resp *orchdv1.SearchResponse
 			if dms {
@@ -624,6 +626,7 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&mode, "mode", "", "hybrid (keyword + semantic) or dense; default rag.search.mode")
 	cmd.Flags().StringVar(&ranking, "ranking", "", "weighted (source type and recency) or plain; default rag.search.ranking")
 	cmd.Flags().IntVar(&perSource, "per-source", 0, "most results one source may return (default rag.search.per_source; -1 for no cap)")
+	addCollectionFlag(cmd, &collections)
 	cmd.Flags().BoolVar(&dms, "direct-messages", false, "also search chat direct messages, which no other search returns (the operator only: Orch.app while a spaces policy is applied)")
 	addBoundFlags(cmd, &since, &until)
 	return cmd

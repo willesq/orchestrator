@@ -516,6 +516,8 @@ type ListSourcesOpts struct {
 	Spaces []string
 	// LabelsV is as SearchOpts.LabelsV.
 	LabelsV int64
+	// Collections narrows as SearchOpts.Collections.
+	Collections []string
 }
 
 // ListSources enumerates distinct sources in the store with their chunk counts.
@@ -544,7 +546,7 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	stores = withLabels(stores, opts.LabelsV)
+	stores = withLabels(onlyCollections(stores, opts.Collections), opts.LabelsV)
 	for _, ss := range stores {
 		st := ss.st
 		filter := buildFilter(ss.must(must), nil, nil, opts.Range)

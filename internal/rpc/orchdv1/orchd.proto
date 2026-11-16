@@ -21,6 +21,14 @@ service Orchd {
   // per-source chunk counts. This is the store's inventory, as opposed to the
   // cadence-refresh registry that `orch source list` reports.
   rpc ListSources(ListSourcesRequest) returns (ListSourcesResponse);
+  // ListCollections names the vector-store collections the caller may read,
+  // with each one's chunk count: the base collection, and with spaces on each
+  // space's own. A migration's backup is never listed: it is not read.
+  rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse);
+  // BrowseChunks pages through every stored chunk matching its filters,
+  // unranked and in storage order, so a client can reach the end of a set
+  // that a ranked search caps.
+  rpc BrowseChunks(BrowseChunksRequest) returns (BrowseChunksResponse);
   // DeleteSource removes every chunk belonging to one source_uri.
   rpc DeleteSource(DeleteSourceRequest) returns (DeleteSourceResponse);
   // Dispatch enqueues a durable agent-task workflow and returns its instance ID.
@@ -368,6 +376,10 @@ message SearchRequest {
   // optional: "weighted" (source type and recency) or "plain"; empty uses
   // rag.search.ranking
   string ranking = 12;
+  // optional: only these collections, as ListCollections names them. It
+  // narrows what the caller's spaces let it read and never widens it; a name
+  // outside them is ignored.
+  repeated string collections = 13;
 }
 
 message SearchResponse {
@@ -415,6 +427,11 @@ message SearchHit {
   // case); empty for anything else. Both fields are stored data: a client
   // putting them in an agent's prompt must quote them like other fields.
   string tenant = 15;
+  // collection is the collection the chunk was read from; point_id its
+  // point there; chunk_index its place in its source (absent when unknown).
+  string collection = 16;
+  string point_id = 17;
+  optional int32 chunk_index = 18;
 }
 
 message ListSourcesRequest {
@@ -426,6 +443,53 @@ message ListSourcesRequest {
   // (Unix seconds; 0 = open)
   int64 since = 5;
   int64 until = 6;
+  // optional: only these collections; narrows as SearchRequest.collections
+  repeated string collections = 7;
+}
+
+message ListCollectionsRequest {}
+
+message ListCollectionsResponse {
+  repeated CollectionInfo collections = 1; // the base first, then by name
+  // spaces_on: spaces are switched on, so each space has its own collection.
+  bool spaces_on = 2;
+}
+
+// CollectionInfo is one readable vector-store collection.
+message CollectionInfo {
+  string name = 1;
+  // space is the space the collection holds; empty for the base collection.
+  string space = 2;
+  int64 chunks = 3;
+  // hybrid: the collection has a keyword index, so hybrid search can run.
+  bool hybrid = 4;
+}
+
+message BrowseChunksRequest {
+  // Filters, each optional and exact-match, as SearchRequest's.
+  repeated string collections = 1;
+  string source_type = 2;
+  string scope = 3;
+  string source_uri = 4;
+  repeated string tags = 5;     // payload.tags contains any
+  repeated string all_tags = 6; // payload.tags contains every one
+  int64 since = 7;              // Unix seconds; 0 = open
+  int64 until = 8;
+  // limit is the page size: 1 to 200; 0 means 50.
+  int32 limit = 9;
+  // cursor continues from a previous response's next_cursor; empty starts
+  // at the beginning. It is opaque and valid only with the same filters.
+  string cursor = 10;
+}
+
+message BrowseChunksResponse {
+  // hits carry no scores: score, keyword_score and exact are zero.
+  repeated SearchHit hits = 1;
+  // next_cursor continues the listing; empty when this page is the last.
+  string next_cursor = 2;
+  // total is how many chunks match the filters, counted on the first page
+  // only (cursor empty); 0 on later pages.
+  int64 total = 3;
 }
 
 message ListSourcesResponse {

@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), its advanced editors (`SpacesEditor`, `SpacesEditorModel`, `SpacesPolicyEdit`, `SpacesAccess`, `SpacesRootsTree`, `SpacesRules`, `SpacesCoverage`), command palette matching (`CommandPalette`) and its Spaces entries (`SpacesPalette`), direct-message search (`DirectMessages`), the operator unlocks (`Unlocks`), the outbound rules (`OutboundRules`), the per-feature model store (`FeatureStore`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`, `SpacesEditorView`, `DirectMessageSearchView`), the connection (`AppClient`, `UnreachableDaemon`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search, sources and browsing (`Memory`, `MemoryModels`, `MemoryBrowse`, `MemoryBrowseModels`, the typed-filter parser `MemoryFilters`, a hit's details `SearchHitDetail`, `DaemonClient+Memory`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), its advanced editors (`SpacesEditor`, `SpacesEditorModel`, `SpacesPolicyEdit`, `SpacesAccess`, `SpacesRootsTree`, `SpacesRules`, `SpacesCoverage`), command palette matching (`CommandPalette`) and its Spaces entries (`SpacesPalette`), direct-message search (`DirectMessages`), the operator unlocks (`Unlocks`), the outbound rules (`OutboundRules`), the per-feature model store (`FeatureStore`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView` (with `MemorySearchPane`, `MemoryBrowsePane`, `MemoryFilterBar`, `MemoryHitViews`, `MemoryFeature`), `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`, `SpacesEditorView`, `DirectMessageSearchView`), the connection (`AppClient`, `UnreachableDaemon`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 | `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
 
@@ -40,7 +40,8 @@ added since then changes none of its lines, so features built in parallel add fi
 - **Connection:** the app keeps one HTTP/2 connection (grpc-swift 2, POSIX transport, plaintext).
   The socket's 0600 mode is the trust boundary, as for every other client. The transport
   reconnects when orchd restarts and recreates the socket.
-- **Deadlines:** each call has a 3 s deadline, matching `orch status`.
+- **Deadlines:** each call has a 3 s deadline, matching `orch status`, except where a call says
+  otherwise (searches 15 s; listing sources, collections and browse pages 30 s; long writes more).
 - **Codegen:** `make proto` generates both the Go and the Swift client code. The Swift protoc
   plugins are built from the versions pinned in `macos/Package.resolved`, so generated code
   always matches the runtime the app links. CI fails if the committed Swift no longer matches
@@ -627,19 +628,64 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
     (`RemoveSource`, with `purge` and `confirm` only after that choice).
   - **Open:** a web source's page, only for plain `http`/`https` URLs.
   - **Search:** within the selected source, using the filter orchd returns for it.
-- **Memory:** a Search/Indexed/Direct messages switch in the toolbar.
-- **Memory → Search:** the `Search` RPC with labelled menus: **Match** (as configured, words and
-  meaning, meaning only), **Type** (the source types seen in the store) and **Show** (5 to 100
-  results). Each hit shows a short source name, its type chip, date and score, the full address,
-  and a preview with blank lines collapsed; **Show more** appears only when the text is long.
-  Before the first search, the empty state lists this launch's recent searches.
-  - Indexed text is untrusted, so it is shown verbatim and never rendered as Markdown.
+- **Memory:** a Search/Browse/Indexed/Direct messages switch in the toolbar. Browse, the
+  collection list and the whole-source reader are FeatureStore models (`MemoryFeature.swift`)
+  handed to the window through the environment, like Direct messages.
+  - **Filter bar** (`MemoryFilterBar`, shared by Search and Browse): the field, then labelled
+    menus: **Collection** (`ListCollections`, loaded once: "All collections" and each collection
+    with its chunk count, its space first with spaces on; with spaces off the one collection is
+    named with "Spaces are off: one collection" instead of a menu), **Type** (the types the
+    Indexed listing has seen), **Match** (Search only), the page size, and **Relevance** (Search
+    only). Typed `key:value` filters (`MemoryFilterParser`: `type:`, `repo:` as the tag
+    `repo:<x>`, `tag:`, `collection:`, `uri:`, `scope:`, `since:`/`until:` with ages `24h`/`7d`/`2w`,
+    `today`, `yesterday`, ISO dates, `until` a day's end) become removable chips; a typed type,
+    source or collection replaces the menu's, tags add to it, and several typed tags must all match (`all_tags`). Unknown
+    keys, URLs and quoted phrases stay in the text; a value that does not parse is dropped with a
+    note under the chips. Filters apply when the search is submitted; removing a chip searches
+    again.
+  - **Rows:** the source's short name with its repo from the `repo:` tag ("README.md · revok"),
+    the type chip, the heading as its own line, "Happened …" and "Stored …" dates, the score with a
+    tooltip on relevance, keyword score and exact, and a three-line preview.
+  - **Inspector:** selecting a row opens it beside the list (`AdaptiveSplit`, stacked below the
+    split width): every `SearchHit` field (address, heading, type, scope, collection, space when
+    set, trust, tenant, tags, happened/ended/stored, relevance/keyword/exact in Search, point ID,
+    chunk index, full text). **Copy as JSON** copies every field with orchd's names; **Open whole
+    source** shows `GetDocument`'s rebuild as plain text in a sheet; **Search within** and
+    **Browse source** set the `uri:` filter; **Reveal in Finder** (`file://` only) and **Open**
+    (plain `http(s)` only, as for web sources) check the scheme again on click (`SourceLink`).
+- **Memory → Search:** the `Search` RPC. The Memory pane's `SearchModel` is `paged`: it asks once
+  per search for `SearchQuery.maxResults` (100) and reveals that batch a page at a time
+  (**Show N more**). It never asks again for a page, because a larger top_k ranks again and could
+  reorder hits already shown. **Relevance** hides hits under a score from the batch only. The
+  footer reads "Showing 20 of 100"; when the batch is full it adds that ranked search returns at
+  most 100 and points to Browse. Text with filters but no words is not sent; a note points to
+  Browse. Before the first search, the empty state lists this launch's recent searches. The Docs
+  and Sources panes' scoped searches use an unpaged model, which sends the count and reads no
+  filters.
+  - Indexed text is untrusted, so it is shown verbatim and never rendered as Markdown; every
+    stored field is made display-safe.
   - A newer search cancels an older one, and a cancelled search that finishes late cannot replace
     newer results.
   - Searches get a 15 s deadline instead of 3 s, because the first search after a restart loads
     the embedding model.
+- **Memory → Browse:** `BrowseChunks`, every chunk the filters match, unranked and in storage
+  order (not chunk order), as `orch rag browse` lists it. It loads the first page when first
+  shown; that page's `total` heads the list. **Load more**, or the last row appearing, fetches the
+  next page with the cursor until orchd returns an empty one ("All N shown"). A new listing bumps a
+  generation, so a page of an older listing that answers late is dropped rather than appended.
+  Words in the field are ignored with a note. Like search, it never returns chat direct messages.
 - **Memory → Indexed:** `ListSources`, every source in memory, up to 200 at a time with totals,
-  filtered by type.
+  filtered by type and collection. Listing walks the store, so it has a 30 s deadline (about 6 s
+  for 60k chunks).
+- **Limits:** a ranked search stops at 100 hits; Browse reaches every match but is unranked. The
+  app is the operator, so it reads every collection; it does not show which spaces an agent may
+  read.
+- **Memory tests:** `MemoryFilterParserTests` (table-driven), `SearchHitDetailTests`,
+  `SearchModelTests` (paging without asking again, relevance, chips), `BrowseModelTests` (paging
+  to the end, stale pages, errors), `CollectionsModelTests`, `SourceDocumentModelTests`, and
+  `MemoryClientTests` over a fake orchd (`FakeMemoryBrowseService` serves `ListCollections` and a
+  paged `BrowseChunks`). Snapshots: `memory-filter-bar-spaces-{on,off}-{light,dark}.png`,
+  `memory-inspector-{light,dark}.png`, `memory-search-results-{light,dark}.png` (`MemorySnapshots`).
 - **Memory → Direct messages (SP-083, D-81):** the operator's search of chat, direct messages
   included, through `SearchDirectMessages` with source type `chat`, the only read that returns
   DMs. orchd allows it only for the operator, which under a policy is Orch.app alone (D-71); with
@@ -981,7 +1027,8 @@ rebuild.
   --filter OrchAppSnapshots` renders the Spaces section, the "enforcement off" banner, the menu
   bar panel's switches, the Spaces pane (at 790 pt and the 320 pt companion width, in
   screen-share-safe mode, and with its Relabel now control before, during and after a run), its
-  Activity and Review pages, and each step of its setup wizard in light and dark from sample data,
+  Activity and Review pages, each step of its setup wizard, and the Memory pane's filter bar
+  (spaces on and off), a hit's inspector and the Search results in light and dark from sample data,
   writing one PNG each. It draws offscreen
   (`cacheDisplay`), so no window appears, the installed app and orchd are not involved, and no
   Screen Recording permission is needed. Without `ORCH_SNAPSHOT_DIR` the suite is skipped.

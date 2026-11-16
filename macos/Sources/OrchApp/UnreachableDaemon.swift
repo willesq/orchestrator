@@ -14,7 +14,9 @@ struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI,
     func status() async throws -> DaemonStatus { throw failure }
     func listPRs() async throws -> PRList { throw failure }
     func search(_ query: SearchQuery) async throws -> SearchResult { throw failure }
-    func listSources(type: String, limit: Int) async throws -> SourceList { throw failure }
+    func listSources(type: String, limit: Int, collections: [String]) async throws -> SourceList { throw failure }
+    func listCollections() async throws -> CollectionList { throw failure }
+    func browseChunks(_ query: BrowseQuery, cursor: String) async throws -> BrowsePage { throw failure }
     func restart(_ name: String?) async throws -> [String] { throw failure }
     func listTasks(status: TaskStatusFilter, limit: Int) async throws -> [TaskRecord] { throw failure }
     func task(id: String) async throws -> TaskRecord? { throw failure }

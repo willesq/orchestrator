@@ -45,6 +45,13 @@ type Hit struct {
 	// Tenant is a chat chunk's tenant from its stored origin,
 	// "<system>:<tenant>" (Origin.TenantKey); empty for anything else.
 	Tenant string
+	// Collection is the collection the chunk was read from, and PointID its
+	// point there.
+	Collection string
+	PointID    string
+	// ChunkIndex is the chunk's place in its source; nil when the stored
+	// payload has none.
+	ChunkIndex *int
 }
 
 // Search modes.
@@ -85,6 +92,10 @@ type SearchOpts struct {
 	// explicit interactive search sets it; every other read leaves them out
 	// (SP-060, D-19).
 	DirectMessages bool
+	// Collections, when set, keeps only these of the collections Spaces
+	// chose (onlyCollections): it narrows and never widens, and a name
+	// outside them is ignored.
+	Collections []string
 }
 
 // ErrHybridUnavailable means a search asked explicitly for hybrid mode could
@@ -127,6 +138,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if err != nil {
 		return nil, "", err
 	}
+	targets = onlyCollections(targets, opts.Collections)
 	targets = withDirectMessages(withLabels(targets, opts.LabelsV), opts.DirectMessages)
 	if len(targets) == 0 {
 		// No space is readable: nothing to search, and nothing to embed.
@@ -202,7 +214,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	raw = s.onePerPoint(raw)
 	cands := make([]candidate, 0, n)
 	for _, r := range mergeByScore(raw, n) {
-		cands = append(cands, candidate{hit: r.SearchHit, score: float64(r.Score), cosine: r.Score})
+		cands = append(cands, candidate{hit: r.SearchHit, score: float64(r.Score), cosine: r.Score, collection: r.collection})
 	}
 	return s.finish(cands, opts, idents), note, nil
 }
@@ -240,7 +252,7 @@ func (s *Service) finish(cands []candidate, opts SearchOpts, idents []string) []
 	cands = rank(cands, s.Ranking, opts.Ranking, s.perSource(opts), opts.TopK, now)
 	hits := make([]Hit, 0, len(cands))
 	for _, c := range cands {
-		hits = append(hits, toHit(c.hit, c.cosine, c.keyword, idents))
+		hits = append(hits, toHit(c.hit, c.collection, c.cosine, c.keyword, idents))
 	}
 	return hits
 }
@@ -339,7 +351,7 @@ func (s *Service) hybridSearch(ctx context.Context, targets []spaceStore, query 
 		// search answers by meaning alone, as when keyword search fails.
 		var denseOnly []candidate
 		for _, h := range mergeByScore(dense, n) {
-			denseOnly = append(denseOnly, candidate{hit: h.SearchHit, score: float64(h.Score), cosine: h.Score})
+			denseOnly = append(denseOnly, candidate{hit: h.SearchHit, score: float64(h.Score), cosine: h.Score, collection: h.collection})
 		}
 		return s.finish(denseOnly, opts, idents), ferr, nil
 	}
@@ -380,9 +392,18 @@ func (r *rateLog) printf(format string, args ...any) {
 	}
 }
 
-func toHit(r SearchHit, cosine, keyword float32, idents []string) Hit {
+// toHit converts a stored point read from collection to a hit.
+func toHit(r SearchHit, collection string, cosine, keyword float32, idents []string) Hit {
 	text := str(r.Payload["text"])
+	var idx *int
+	if f, ok := r.Payload["chunk_index"].(float64); ok && f >= 0 && f == math.Trunc(f) && f <= math.MaxInt32 {
+		i := int(f)
+		idx = &i
+	}
 	return Hit{
+		Collection: collection,
+		PointID:    r.PointID(),
+		ChunkIndex: idx,
 		Text:       text,
 		SourceURI:  str(r.Payload["source_uri"]),
 		SourceType: str(r.Payload["source_type"]),

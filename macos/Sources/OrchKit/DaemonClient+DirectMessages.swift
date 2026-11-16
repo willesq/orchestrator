@@ -5,15 +5,7 @@ import GRPCCore
 /// orchd allows only for the operator, Orch.app under a policy (D-81).
 extension DaemonClient: DirectMessagesAPI {
     public func searchDirectMessages(_ query: SearchQuery) async throws -> DirectMessageResult {
-        let q = query.normalized
-        var search = Orchd_V1_SearchRequest()
-        search.query = q.text
-        search.topK = Int32(q.limit)
-        search.sourceType = q.sourceType
-        search.scope = q.scope
-        search.mode = q.mode.rawValue
-        search.sourceUri = q.sourceURI
-        search.allTags = q.allTags
+        let search = Self.searchRequest(query.normalized)
         var request = Orchd_V1_SearchDirectMessagesRequest()
         request.search = search
         var options = CallOptions.defaults
