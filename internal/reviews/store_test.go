@@ -139,3 +139,28 @@ func TestActiveAndValidMode(t *testing.T) {
 		t.Error("unknown mode accepted")
 	}
 }
+
+func TestStoreKeepsSetupAndWorkspace(t *testing.T) {
+	ctx := context.Background()
+	conn := testDB(t)
+	s := NewStore(conn)
+	url := "https://github.com/a/b/pull/2"
+	r := Review{URL: url, Repo: "a/b", Number: 2, Mode: ModeVerdict, State: StateReviewing, Workspace: "/w/abc",
+		Setup: Setup{InstructionsFrom: FromHead, ProjectHooks: HooksOn}}
+	if err := s.Put(ctx, &r); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := s.Get(ctx, url)
+	want := Setup{InstructionsFrom: FromHead, CompareAgainst: CompareBase, ProjectHooks: HooksOn}
+	if err != nil || got.Setup != want || got.Workspace != "/w/abc" {
+		t.Fatalf("Get = %+v, %v", got, err)
+	}
+	// A row written before the setup existed reads as the defaults.
+	if _, err := conn.ExecContext(ctx, `INSERT INTO pr_reviews (url, repo, number, mode, state) VALUES ('https://github.com/a/b/pull/3', 'a/b', 3, 'verdict', 'waiting')`); err != nil {
+		t.Fatal(err)
+	}
+	old, _, err := s.Get(ctx, "https://github.com/a/b/pull/3")
+	if err != nil || old.Setup != (Setup{}).Normalized() || old.Workspace != "" {
+		t.Fatalf("old row = %+v, %v", old.Setup, err)
+	}
+}

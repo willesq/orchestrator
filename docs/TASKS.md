@@ -41,6 +41,15 @@ A PR watch also ends by itself: when the PR is merged or closed (moving between 
 it), and after 14 days, with a note saying so. Choose to review the PR again in Orch.app for another 14
 days.
 
+orchd checks each reviewed PR out itself and starts the reviewer with the repo's project
+instructions, skills and agents from the default branch, never from the PR. The PR's own
+`CLAUDE.md` and `.claude/` changes are reviewed as part of the diff. **Review setup** on the PR's
+review card in Orch.app changes that per PR: take the instructions from the PR's base branch, its
+head or nowhere, compare against the default branch to review a whole stack, and choose whether the
+repo's Claude Code settings, hooks and MCP servers apply. By default they apply only to your own
+repos and repos bound to one of your spaces; otherwise orchd removes them from its checkout. Repos that keep their instructions in `AGENTS.md` should import it from
+`CLAUDE.md` with a single `@AGENTS.md` line.
+
 `orch tasks` marks a task nothing is running as `⚠ stalled`. In Orch.app, the Tasks tab updates
 live as tasks change (orchd streams them; no refresh needed). It shows the same running, waiting or
 stalled state, with **Retry**, **Cancel…** and **Copy Resume Command**.

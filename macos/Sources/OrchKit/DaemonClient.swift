@@ -244,7 +244,7 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
     }
 
     public func watchPRReview(url: String, mode: PRReviewMode, comment: String?, instructions: String?,
-                              reviewAnyway: Bool, updateInPlace: Bool?) async throws -> PRReview {
+                              reviewAnyway: Bool, updateInPlace: Bool?, setup: PRReviewSetup?) async throws -> PRReview {
         var request = Orchd_V1_WatchPRReviewRequest()
         request.url = url
         request.mode = mode.rawValue
@@ -260,6 +260,12 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         if let updateInPlace {
             request.setUpdateInPlace = true
             request.updateInPlace = updateInPlace
+        }
+        if let setup {
+            request.setSetup = true
+            request.instructionsFrom = setup.instructionsFrom.rawValue
+            request.compareAgainst = setup.compareAgainst.rawValue
+            request.projectHooks = setup.projectHooks.rawValue
         }
         return Self.review(try await orchd.watchPRReview(request, options: callOptions))
     }
@@ -388,6 +394,7 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
             url: r.url, repo: r.repo, number: Int(r.number), mode: PRReviewMode(rawValue: r.mode) ?? .verdict,
             state: PRReviewState(rawValue: r.state), headSHA: r.headSha, pendingSHA: r.pendingSha, taskID: r.taskID,
             verdict: PRVerdict(rawValue: r.verdict), reason: r.reason, comment: r.comment, instructions: r.instructions, goAhead: r.goAhead, updateInPlace: r.updateInPlace,
+            setup: PRReviewSetup(instructionsFrom: r.instructionsFrom, compareAgainst: r.compareAgainst, projectHooks: r.projectHooks),
             forUser: r.forUser, report: r.report,
             posted: r.posted,
             note: r.note, verdictAt: date(fromUnix: r.verdictAt), updatedAt: date(fromUnix: r.updatedAt),

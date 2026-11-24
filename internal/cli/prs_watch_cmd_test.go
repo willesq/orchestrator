@@ -49,6 +49,22 @@ func TestPRsWatches(t *testing.T) {
 	if strings.Contains(out, "posted=") {
 		t.Errorf("nothing posted, but the line says so: %q", out)
 	}
+	if strings.Contains(out, "setup:") {
+		t.Errorf("the default setup is spelled out: %q", out)
+	}
+
+	resetPRWatches(t, &orchdv1.PRReview{Url: watchedURL, State: "waiting", Mode: "verdict",
+		InstructionsFrom: "head", CompareAgainst: "base", ProjectHooks: ""})
+	out, err = run(factory(&fakeClient{}, nil), "", "prs", "watches")
+	if err != nil || !strings.Contains(out, "setup: instructions from head, compared against base, project hooks automatic") {
+		t.Errorf("non-default setup: %q, %v", out, err)
+	}
+	resetPRWatches(t, &orchdv1.PRReview{Url: watchedURL, State: "waiting", Mode: "verdict",
+		InstructionsFrom: "default", CompareAgainst: "default", ProjectHooks: "off"})
+	out, _ = run(factory(&fakeClient{}, nil), "", "prs", "watches")
+	if !strings.Contains(out, "compared against default, project hooks off") {
+		t.Errorf("non-default setup: %q", out)
+	}
 
 	resetPRWatches(t, &orchdv1.PRReview{Url: watchedURL, State: "reviewing", Mode: "feedback", Verdict: "changes",
 		Posted: "superseded", Note: "superseded by bbbbbbb: the verdict for aaaaaaa was not posted"})

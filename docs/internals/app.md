@@ -873,8 +873,14 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
     - **Review:** two permissions, which for a watched PR always show the mode orchd holds, "approve the PR, with its comment if it has one" (unavailable on
       your own PR) and "comment its suggestions when it does not approve"; both off means orch
       asks you each time. A third box, **Update its earlier comment instead of adding another**,
-      is off by default and also applies to **Post comment**. **Notes for the reviewer** are added to the review prompt and never
-      posted. **Review when
+      is off by default and also applies to **Post comment**. **Review setup** (`ReviewSetupSection`)
+      picks where the reviewer's project instructions come from (default branch, PR base branch,
+      PR head or none), what it compares against (PR base or default branch), and whether the
+      repo's settings, hooks and MCP servers apply (automatic, on or off); a change that widens what
+      unreviewed content can do (base, head, or hooks on) asks first, and a change on a reviewed PR
+      reviews it again ([tasks.md](tasks.md#pr-review-watch)). Snapshot:
+      `pr-review-setup-{light,dark}.png` (`PRReviewSetupSnapshots`). **Notes for the reviewer** are
+      added to the review prompt and never posted. **Review when
       ready** starts the watch (`WatchPRReview`).
     - **Held:** a PR by someone who is not the repo's owner, a member or a collaborator waits for
       **Review anyway…** (after a confirmation that it runs their code with your sign-in), and a

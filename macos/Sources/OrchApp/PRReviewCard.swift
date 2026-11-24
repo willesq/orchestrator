@@ -18,6 +18,10 @@ struct ReviewCard: View {
     @State private var instructions = ""
     @State private var confirming: PRReviewMode?
     @State private var confirmingAnyway = false
+    /// The setup "Review when ready" starts with, and a widening change
+    /// waiting for the user's go-ahead.
+    @State private var setup = PRReviewSetup.standard
+    @State private var confirmingSetup: PRReviewSetup?
     /// The draft as it was when the confirmation opened, which is what gets
     /// posted, even if a new verdict replaces the editor's text meanwhile.
     @State private var confirmedDraft = ""
@@ -43,6 +47,7 @@ struct ReviewCard: View {
                 })
                 if review.state == .held { held(review) }
                 permissions(watching: review)
+                ReviewSetupSection(setup: review.setup) { setSetup($0, review) }
                 notes(review)
                 if review.verdict != nil {
                     verdict(review)
@@ -55,13 +60,14 @@ struct ReviewCard: View {
                     Text(verbatim: displaySafe("\(state.label)\(review.note.isEmpty ? "" : ": \(review.note)")")).textStyle(.caption)
                 }
                 permissions(watching: nil)
+                ReviewSetupSection(setup: setup) { setSetup($0, nil) }
                 notes(review)
                 HStack {
                     Spacer()
                     Button("Review when ready") {
                         Task {
                             await prs.watch(url, mode: PRReviewMode(mayApprove: mayApprove && !ownPR, mayComment: mayComment),
-                                            instructions: instructions, updateInPlace: updateInPlace)
+                                            instructions: instructions, updateInPlace: updateInPlace, setup: setup)
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -92,6 +98,15 @@ struct ReviewCard: View {
         } message: {
             Text("The review runs this PR's code on this Mac with your GitHub sign-in. Do it once you have looked at the changes and trust them. A later push is held again.")
         }
+        .confirmationDialog("Let the reviewer use this setup?", isPresented: Binding(get: { confirmingSetup != nil },
+                                                                                  set: { if !$0 { confirmingSetup = nil } })) {
+            if let next = confirmingSetup {
+                Button("Allow") { applySetup(next, prs.reviews.byURL[url]) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(confirmingSetup?.warning ?? "")
+        }
         .confirmationDialog(confirmTitle, isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })) {
             if let choice = confirming {
                 Button(confirmButton(choice)) {
@@ -108,6 +123,25 @@ struct ReviewCard: View {
         draft = review?.comment ?? ""
         instructions = review?.instructions ?? ""
         updateInPlace = review?.updateInPlace ?? false
+        setup = review?.setup ?? .standard
+    }
+
+    /// Changes how the PR's reviews are set up; letting unreviewed content
+    /// steer or run in the review asks first, as widening what orch posts does.
+    private func setSetup(_ next: PRReviewSetup, _ review: PRReview?) {
+        if next.widens(from: review?.setup ?? setup) {
+            confirmingSetup = next
+        } else {
+            applySetup(next, review)
+        }
+    }
+
+    private func applySetup(_ next: PRReviewSetup, _ review: PRReview?) {
+        guard let review, review.state?.isActive == true else {
+            setup = next
+            return
+        }
+        Task { await prs.watch(url, mode: review.mode, setup: next) }
     }
 
     private func confirm(_ mode: PRReviewMode) {

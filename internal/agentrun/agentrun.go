@@ -117,7 +117,8 @@ var readOnlyAgents = map[string]bool{"pr-verdict": true}
 
 // gitHubWriteTools are the commands readOnlyAgents are denied: every gh
 // command that changes GitHub, gh api whole (a pattern cannot tell its reads
-// from its writes), the token itself, raw HTTP clients, pushes, and orch's own
+// from its writes), the token itself, raw HTTP clients, pushes, worktree
+// changes to the checkouts orchd prepared, and orch's own
 // database, which holds what orchd may post. Patterns match what the agent
 // types, not what programs it starts do, so they are a guard rather than a
 // sandbox.
@@ -125,7 +126,7 @@ const gitHubWriteTools = "Bash(gh pr review:*),Bash(gh pr comment:*),Bash(gh pr 
 	"Bash(gh pr edit:*),Bash(gh pr ready:*),Bash(gh pr reopen:*),Bash(gh pr create:*),Bash(gh pr lock:*)," +
 	"Bash(gh issue:*),Bash(gh api:*),Bash(gh auth:*),Bash(gh release:*),Bash(gh workflow:*),Bash(gh run:*)," +
 	"Bash(gh repo edit:*),Bash(gh repo delete:*),Bash(gh secret:*),Bash(gh variable:*),Bash(gh label:*)," +
-	"Bash(gh gist:*),Bash(git push:*),Bash(git -C:*),Bash(curl:*),Bash(wget:*),Bash(sqlite3:*),WebFetch"
+	"Bash(gh gist:*),Bash(git push:*),Bash(git -C:*),Bash(git worktree:*),Bash(curl:*),Bash(wget:*),Bash(sqlite3:*),WebFetch"
 
 // operatorTools are the commands that change orch's own settings, denied to every
 // run so a task cannot widen its own limits or permissions.
@@ -273,7 +274,9 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 		prompt = resumePrompt(t)
 	}
 	o, err := r.session(ctx, t, dir, prompt, resume)
-	if err == nil && o.Status == StatusComplete && r.Verify.Enabled {
+	// Reason: a read-only agent changes nothing to verify, and a fix-up turn
+	// would ask it to edit the code it reviews.
+	if err == nil && o.Status == StatusComplete && r.Verify.Enabled && !readOnlyAgents[t.Agent] {
 		o, err = r.verifyAndFix(ctx, t, dir, o)
 	}
 	if cancelled, reason := r.live.wasCancelled(entry); cancelled {

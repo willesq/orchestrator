@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -11,9 +12,11 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/github"
+	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/reviews"
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/spaces"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/workflows"
 )
@@ -35,10 +38,12 @@ func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, c
 		Post:  reviews.NewGHPoster(ghp.Env),
 		// Unrouted, so the agent's own model runs: the review fans out to
 		// subagents, which only Claude Code sessions have. The task reads
-		// the memory of the space the PR's owner is bound to (SP-026).
-		Dispatch: func(ctx context.Context, repo, body string) (string, error) {
+		// the memory of the space the PR's owner is bound to (SP-026). It
+		// runs in the checkout orchd prepared, or a scratch directory
+		// without one.
+		Dispatch: func(ctx context.Context, repo, body string, co reviews.Checkout) (string, error) {
 			ctx = queue.WithReadSpace(ctx, reviewSpace(ghp, repo))
-			return disp.Dispatch(ctx, reviews.Agent, body, "", workflows.Route{})
+			return disp.Dispatch(ctx, reviews.Agent, body, co.Cwd, workflows.Route{})
 		},
 		Task: func(ctx context.Context, id string) (string, string, bool, error) {
 			t, ok, err := tasks.Get(ctx, id)
@@ -52,6 +57,9 @@ func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, c
 	if ghp != nil {
 		w.CheckOwner = docsOwnerCheck(ghp.spaces)
 	}
+	w.HooksDefault = func(ctx context.Context, owner string) bool {
+		return reviewHooksDefault(ctx, ghp, w.Login, owner)
+	}
 	if ctl != nil {
 		w.Cancel = func(ctx context.Context, id, reason string) error {
 			_, err := ctl.CancelFor(ctx, id, reason)
@@ -59,6 +67,31 @@ func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, c
 		}
 	}
 	return w
+}
+
+// reviewHooksDefault reports whether a review of owner's repo runs the repo's
+// hooks and MCP servers when the user left it automatic: only for the user's
+// own account and owners bound to one of their spaces, whose code they chose
+// to trust. Quarantine, an unreadable policy and errors all say no.
+func reviewHooksDefault(ctx context.Context, ghp *ghProfiles, login func(context.Context) (string, error), owner string) bool {
+	if space := watchedOwnerSpace(ghp, owner); space != "" && space != spaces.Quarantine {
+		return true
+	}
+	if login == nil {
+		return false
+	}
+	me, err := login(ctx)
+	return err == nil && me != "" && strings.EqualFold(me, owner)
+}
+
+// newReviewCheckouts prepares review checkouts under orch's data directory,
+// fetching as the GitHub account each owner's space names.
+func newReviewCheckouts(ghp *ghProfiles) *reviews.Checkouts {
+	return &reviews.Checkouts{
+		Root: filepath.Join(paths.DataDir(), "review-checkouts"),
+		Git:  reviews.ExecGit,
+		Env:  ghp.Env,
+	}
 }
 
 // reviewSpace is the space a review task of repo's PR ("owner/name") reads
@@ -179,7 +212,15 @@ func (s *server) WatchPRReview(ctx context.Context, req *orchdv1.WatchPRReviewRe
 		u := req.GetUpdateInPlace()
 		updateInPlace = &u
 	}
-	r, err := w.WatchOpts(ctx, req.GetUrl(), req.GetMode(), comment, instructions, req.GetReviewAnyway(), updateInPlace)
+	var setup *reviews.Setup
+	if req.GetSetSetup() {
+		setup = &reviews.Setup{InstructionsFrom: req.GetInstructionsFrom(), CompareAgainst: req.GetCompareAgainst(),
+			ProjectHooks: req.GetProjectHooks()}
+		if err := setup.Validate(); err != nil {
+			return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+	r, err := w.WatchOpts(ctx, req.GetUrl(), req.GetMode(), comment, instructions, req.GetReviewAnyway(), updateInPlace, setup)
 	if errors.Is(err, reviews.ErrPosting) {
 		return nil, grpcstatus.Error(codes.Aborted, err.Error())
 	}
@@ -315,10 +356,12 @@ func (c *detailCache) get(ctx context.Context, url string, refresh bool) (review
 }
 
 func reviewPB(r reviews.Review) *orchdv1.PRReview {
+	setup := r.Setup.Normalized()
 	return &orchdv1.PRReview{
 		Url: r.URL, Repo: r.Repo, Number: clampInt32(r.Number), Mode: r.Mode, State: r.State,
 		HeadSha: r.HeadSHA, PendingSha: r.PendingSHA, TaskId: r.TaskID, Verdict: r.Verdict,
 		Reason: r.Reason, Comment: r.Comment, Instructions: r.Instructions, ForUser: r.ForUser, Report: r.Report, GoAhead: r.GoAhead, UpdateInPlace: r.UpdateInPlace, Posted: r.Posted, Note: r.Note,
+		InstructionsFrom: setup.InstructionsFrom, CompareAgainst: setup.CompareAgainst, ProjectHooks: setup.ProjectHooks,
 		CreatedAt: unixOrZero(r.CreatedAt), UpdatedAt: unixOrZero(r.UpdatedAt), VerdictAt: unixOrZero(r.VerdictAt),
 	}
 }

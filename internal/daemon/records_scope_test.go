@@ -197,7 +197,7 @@ func TestReviewTaskRunsInItsPRsSpace(t *testing.T) {
 	w := newReviewWatcher(nil, spaceDispatcher{got: &recorded}, nil, nil, nil, &ghProfiles{spaces: s.spaces})
 	for repo, want := range repoSpaces {
 		recorded = "unset"
-		if _, err := w.Dispatch(context.Background(), repo, "review "+repo); err != nil {
+		if _, err := w.Dispatch(context.Background(), repo, "review "+repo, reviews.Checkout{}); err != nil {
 			t.Fatal(err)
 		}
 		if recorded != want {
@@ -213,7 +213,7 @@ func TestReviewTaskRunsInItsPRsSpace(t *testing.T) {
 	}
 	for _, ghp := range []*ghProfiles{nil, {}} {
 		w := newReviewWatcher(nil, spaceDispatcher{got: &recorded}, nil, nil, nil, ghp)
-		if _, err := w.Dispatch(context.Background(), "acme/api", "x"); err != nil || recorded != "" {
+		if _, err := w.Dispatch(context.Background(), "acme/api", "x", reviews.Checkout{}); err != nil || recorded != "" {
 			t.Errorf("with no policy the review records %q, %v", recorded, err)
 		}
 	}

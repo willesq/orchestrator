@@ -46,6 +46,9 @@ func newPRsWatchesCmd(cf clientFactory) *cobra.Command {
 				if note := r.GetNote(); note != "" {
 					fmt.Fprintf(out, "  %s\n", github.Printable(note, 300))
 				}
+				if setup := reviewSetup(r); setup != "" {
+					fmt.Fprintf(out, "  %s\n", setup)
+				}
 			}
 			return nil
 		},
@@ -87,4 +90,19 @@ func newPRsStopCmd(cf clientFactory) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&forget, "forget", false, "also delete the PR's verdict")
 	return cmd
+}
+
+// reviewSetup describes how r's reviews are set up when that is not the
+// default: the default branch's instructions, against the PR's base, with
+// hooks automatic.
+func reviewSetup(r *orchdv1.PRReview) string {
+	from, compare, hooks := r.GetInstructionsFrom(), r.GetCompareAgainst(), r.GetProjectHooks()
+	if (from == "" || from == "default") && (compare == "" || compare == "base") && hooks == "" {
+		return ""
+	}
+	if hooks == "" {
+		hooks = "automatic"
+	}
+	return fmt.Sprintf("setup: instructions from %s, compared against %s, project hooks %s",
+		github.Printable(orNone(from), 20), github.Printable(orNone(compare), 20), github.Printable(hooks, 20))
 }

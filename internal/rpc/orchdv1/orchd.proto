@@ -1942,6 +1942,13 @@ message PRReview {
   string report = 22;
   // a later comment edits orch's earlier one on the PR rather than adding another
   bool update_in_place = 23;
+  // how the PR's reviews are set up: where the project's instructions,
+  // skills and agents come from (default | base | head | none), what the diff
+  // is taken against (base | default), and whether the repo's Claude Code
+  // settings, hooks and MCP servers apply ("" automatic | on | off)
+  string instructions_from = 24;
+  string compare_against = 25;
+  string project_hooks = 26;
 }
 
 message WatchPRReviewRequest {
@@ -1959,6 +1966,12 @@ message WatchPRReviewRequest {
   // replace whether a later comment edits orch's earlier one on the PR
   bool set_update_in_place = 8;
   bool update_in_place = 9;
+  // replace how the PR's reviews are set up (see PRReview); a new setup on a
+  // PR with a verdict reviews its current commit again
+  bool set_setup = 10;
+  string instructions_from = 11;
+  string compare_against = 12;
+  string project_hooks = 13;
 }
 
 message SetPRReviewUpdateInPlaceRequest {

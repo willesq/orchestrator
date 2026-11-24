@@ -36,7 +36,7 @@ struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI,
     func gitHubItems() async throws -> GitHubItemList { throw failure }
     func prReviews() async throws -> [PRReview] { throw failure }
     func watchPRReview(url: String, mode: PRReviewMode, comment: String?, instructions: String?,
-                       reviewAnyway: Bool, updateInPlace: Bool?) async throws -> PRReview {
+                       reviewAnyway: Bool, updateInPlace: Bool?, setup: PRReviewSetup?) async throws -> PRReview {
         throw failure
     }
     func setPRReviewUpdateInPlace(url: String, on: Bool) async throws -> PRReview { throw failure }
