@@ -568,3 +568,31 @@ func TestIsTaskSessionID(t *testing.T) {
 		}
 	}
 }
+
+func TestReadOnlyAgentMayNotChangeCheckouts(t *testing.T) {
+	if !strings.Contains(deniedTools("pr-verdict"), "Bash(git worktree:*)") {
+		t.Error("a read-only agent may change orchd's review checkouts")
+	}
+	if strings.Contains(deniedTools("dev"), "Bash(git worktree:*)") {
+		t.Error("a dev task may not manage its own worktrees")
+	}
+}
+
+func TestReadOnlyAgentIsNotVerified(t *testing.T) {
+	for _, tt := range []struct {
+		agent    string
+		verified bool
+	}{{"pr-verdict", false}, {"dev", true}} {
+		f := newFixture(t)
+		f.reply(t, `{"type":"result","subtype":"success","is_error":false,"result":"ok"}`)
+		f.runner.Verify.Enabled = true
+		task := Task{ID: "task-v-" + tt.agent, Agent: tt.agent, Body: "b", Cwd: t.TempDir(), Heads: map[string]string{}}
+		got, err := f.runner.Run(context.Background(), task)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (got.Verification != "") != tt.verified {
+			t.Errorf("%s: verification = %q", tt.agent, got.Verification)
+		}
+	}
+}
