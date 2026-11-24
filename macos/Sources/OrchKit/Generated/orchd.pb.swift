@@ -4603,6 +4603,25 @@ public nonisolated struct Orchd_V1_PRReview: @unchecked Sendable {
     set {_uniqueStorage()._updateInPlace = newValue}
   }
 
+  /// how the PR's reviews are set up: where the project's instructions,
+  /// skills and agents come from (default | base | head | none), what the diff
+  /// is taken against (base | default), and whether the repo's Claude Code
+  /// settings, hooks and MCP servers apply ("" automatic | on | off)
+  public var instructionsFrom: String {
+    get {_storage._instructionsFrom}
+    set {_uniqueStorage()._instructionsFrom = newValue}
+  }
+
+  public var compareAgainst: String {
+    get {_storage._compareAgainst}
+    set {_uniqueStorage()._compareAgainst = newValue}
+  }
+
+  public var projectHooks: String {
+    get {_storage._projectHooks}
+    set {_uniqueStorage()._projectHooks = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -4640,6 +4659,16 @@ public nonisolated struct Orchd_V1_WatchPRReviewRequest: Sendable {
   public var setUpdateInPlace: Bool = false
 
   public var updateInPlace: Bool = false
+
+  /// replace how the PR's reviews are set up (see PRReview); a new setup on a
+  /// PR with a verdict reviews its current commit again
+  public var setSetup: Bool = false
+
+  public var instructionsFrom: String = String()
+
+  public var compareAgainst: String = String()
+
+  public var projectHooks: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -14759,7 +14788,7 @@ nonisolated extension Orchd_V1_ListPRReviewsResponse: SwiftProtobuf.Message, Swi
 
 nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PRReview"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}repo\0\u{1}number\0\u{1}mode\0\u{1}state\0\u{3}head_sha\0\u{3}pending_sha\0\u{3}task_id\0\u{1}verdict\0\u{1}reason\0\u{1}comment\0\u{1}posted\0\u{1}note\0\u{3}created_at\0\u{3}updated_at\0\u{3}verdict_at\0\u{3}checked_at\0\u{3}next_check_at\0\u{1}instructions\0\u{3}go_ahead\0\u{3}for_user\0\u{1}report\0\u{3}update_in_place\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}repo\0\u{1}number\0\u{1}mode\0\u{1}state\0\u{3}head_sha\0\u{3}pending_sha\0\u{3}task_id\0\u{1}verdict\0\u{1}reason\0\u{1}comment\0\u{1}posted\0\u{1}note\0\u{3}created_at\0\u{3}updated_at\0\u{3}verdict_at\0\u{3}checked_at\0\u{3}next_check_at\0\u{1}instructions\0\u{3}go_ahead\0\u{3}for_user\0\u{1}report\0\u{3}update_in_place\0\u{3}instructions_from\0\u{3}compare_against\0\u{3}project_hooks\0")
 
   fileprivate class _StorageClass {
     var _url: String = String()
@@ -14785,6 +14814,9 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
     var _forUser: String = String()
     var _report: String = String()
     var _updateInPlace: Bool = false
+    var _instructionsFrom: String = String()
+    var _compareAgainst: String = String()
+    var _projectHooks: String = String()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -14818,6 +14850,9 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
       _forUser = source._forUser
       _report = source._report
       _updateInPlace = source._updateInPlace
+      _instructionsFrom = source._instructionsFrom
+      _compareAgainst = source._compareAgainst
+      _projectHooks = source._projectHooks
     }
   }
 
@@ -14859,6 +14894,9 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
         case 21: try { try decoder.decodeSingularStringField(value: &_storage._forUser) }()
         case 22: try { try decoder.decodeSingularStringField(value: &_storage._report) }()
         case 23: try { try decoder.decodeSingularBoolField(value: &_storage._updateInPlace) }()
+        case 24: try { try decoder.decodeSingularStringField(value: &_storage._instructionsFrom) }()
+        case 25: try { try decoder.decodeSingularStringField(value: &_storage._compareAgainst) }()
+        case 26: try { try decoder.decodeSingularStringField(value: &_storage._projectHooks) }()
         default: break
         }
       }
@@ -14936,6 +14974,15 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
       if _storage._updateInPlace != false {
         try visitor.visitSingularBoolField(value: _storage._updateInPlace, fieldNumber: 23)
       }
+      if !_storage._instructionsFrom.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._instructionsFrom, fieldNumber: 24)
+      }
+      if !_storage._compareAgainst.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._compareAgainst, fieldNumber: 25)
+      }
+      if !_storage._projectHooks.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._projectHooks, fieldNumber: 26)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -14968,6 +15015,9 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._forUser != rhs_storage._forUser {return false}
         if _storage._report != rhs_storage._report {return false}
         if _storage._updateInPlace != rhs_storage._updateInPlace {return false}
+        if _storage._instructionsFrom != rhs_storage._instructionsFrom {return false}
+        if _storage._compareAgainst != rhs_storage._compareAgainst {return false}
+        if _storage._projectHooks != rhs_storage._projectHooks {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -14979,7 +15029,7 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
 
 nonisolated extension Orchd_V1_WatchPRReviewRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WatchPRReviewRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}mode\0\u{3}set_comment\0\u{1}comment\0\u{3}set_instructions\0\u{1}instructions\0\u{3}review_anyway\0\u{3}set_update_in_place\0\u{3}update_in_place\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}mode\0\u{3}set_comment\0\u{1}comment\0\u{3}set_instructions\0\u{1}instructions\0\u{3}review_anyway\0\u{3}set_update_in_place\0\u{3}update_in_place\0\u{3}set_setup\0\u{3}instructions_from\0\u{3}compare_against\0\u{3}project_hooks\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -14996,6 +15046,10 @@ nonisolated extension Orchd_V1_WatchPRReviewRequest: SwiftProtobuf.Message, Swif
       case 7: try { try decoder.decodeSingularBoolField(value: &self.reviewAnyway) }()
       case 8: try { try decoder.decodeSingularBoolField(value: &self.setUpdateInPlace) }()
       case 9: try { try decoder.decodeSingularBoolField(value: &self.updateInPlace) }()
+      case 10: try { try decoder.decodeSingularBoolField(value: &self.setSetup) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.instructionsFrom) }()
+      case 12: try { try decoder.decodeSingularStringField(value: &self.compareAgainst) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self.projectHooks) }()
       default: break
       }
     }
@@ -15029,6 +15083,18 @@ nonisolated extension Orchd_V1_WatchPRReviewRequest: SwiftProtobuf.Message, Swif
     if self.updateInPlace != false {
       try visitor.visitSingularBoolField(value: self.updateInPlace, fieldNumber: 9)
     }
+    if self.setSetup != false {
+      try visitor.visitSingularBoolField(value: self.setSetup, fieldNumber: 10)
+    }
+    if !self.instructionsFrom.isEmpty {
+      try visitor.visitSingularStringField(value: self.instructionsFrom, fieldNumber: 11)
+    }
+    if !self.compareAgainst.isEmpty {
+      try visitor.visitSingularStringField(value: self.compareAgainst, fieldNumber: 12)
+    }
+    if !self.projectHooks.isEmpty {
+      try visitor.visitSingularStringField(value: self.projectHooks, fieldNumber: 13)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -15042,6 +15108,10 @@ nonisolated extension Orchd_V1_WatchPRReviewRequest: SwiftProtobuf.Message, Swif
     if lhs.reviewAnyway != rhs.reviewAnyway {return false}
     if lhs.setUpdateInPlace != rhs.setUpdateInPlace {return false}
     if lhs.updateInPlace != rhs.updateInPlace {return false}
+    if lhs.setSetup != rhs.setSetup {return false}
+    if lhs.instructionsFrom != rhs.instructionsFrom {return false}
+    if lhs.compareAgainst != rhs.compareAgainst {return false}
+    if lhs.projectHooks != rhs.projectHooks {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

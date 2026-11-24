@@ -13205,8 +13205,15 @@ type PRReview struct {
 	Report  string `protobuf:"bytes,22,opt,name=report,proto3" json:"report,omitempty"`
 	// a later comment edits orch's earlier one on the PR rather than adding another
 	UpdateInPlace bool `protobuf:"varint,23,opt,name=update_in_place,json=updateInPlace,proto3" json:"update_in_place,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// how the PR's reviews are set up: where the project's instructions,
+	// skills and agents come from (default | base | head | none), what the diff
+	// is taken against (base | default), and whether the repo's Claude Code
+	// settings, hooks and MCP servers apply ("" automatic | on | off)
+	InstructionsFrom string `protobuf:"bytes,24,opt,name=instructions_from,json=instructionsFrom,proto3" json:"instructions_from,omitempty"`
+	CompareAgainst   string `protobuf:"bytes,25,opt,name=compare_against,json=compareAgainst,proto3" json:"compare_against,omitempty"`
+	ProjectHooks     string `protobuf:"bytes,26,opt,name=project_hooks,json=projectHooks,proto3" json:"project_hooks,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PRReview) Reset() {
@@ -13400,6 +13407,27 @@ func (x *PRReview) GetUpdateInPlace() bool {
 	return false
 }
 
+func (x *PRReview) GetInstructionsFrom() string {
+	if x != nil {
+		return x.InstructionsFrom
+	}
+	return ""
+}
+
+func (x *PRReview) GetCompareAgainst() string {
+	if x != nil {
+		return x.CompareAgainst
+	}
+	return ""
+}
+
+func (x *PRReview) GetProjectHooks() string {
+	if x != nil {
+		return x.ProjectHooks
+	}
+	return ""
+}
+
 type WatchPRReviewRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Url        string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`                                  // https://github.com/<owner>/<repo>/pull/<n>
@@ -13416,6 +13444,12 @@ type WatchPRReviewRequest struct {
 	// replace whether a later comment edits orch's earlier one on the PR
 	SetUpdateInPlace bool `protobuf:"varint,8,opt,name=set_update_in_place,json=setUpdateInPlace,proto3" json:"set_update_in_place,omitempty"`
 	UpdateInPlace    bool `protobuf:"varint,9,opt,name=update_in_place,json=updateInPlace,proto3" json:"update_in_place,omitempty"`
+	// replace how the PR's reviews are set up (see PRReview); a new setup on a
+	// PR with a verdict reviews its current commit again
+	SetSetup         bool   `protobuf:"varint,10,opt,name=set_setup,json=setSetup,proto3" json:"set_setup,omitempty"`
+	InstructionsFrom string `protobuf:"bytes,11,opt,name=instructions_from,json=instructionsFrom,proto3" json:"instructions_from,omitempty"`
+	CompareAgainst   string `protobuf:"bytes,12,opt,name=compare_against,json=compareAgainst,proto3" json:"compare_against,omitempty"`
+	ProjectHooks     string `protobuf:"bytes,13,opt,name=project_hooks,json=projectHooks,proto3" json:"project_hooks,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -13511,6 +13545,34 @@ func (x *WatchPRReviewRequest) GetUpdateInPlace() bool {
 		return x.UpdateInPlace
 	}
 	return false
+}
+
+func (x *WatchPRReviewRequest) GetSetSetup() bool {
+	if x != nil {
+		return x.SetSetup
+	}
+	return false
+}
+
+func (x *WatchPRReviewRequest) GetInstructionsFrom() string {
+	if x != nil {
+		return x.InstructionsFrom
+	}
+	return ""
+}
+
+func (x *WatchPRReviewRequest) GetCompareAgainst() string {
+	if x != nil {
+		return x.CompareAgainst
+	}
+	return ""
+}
+
+func (x *WatchPRReviewRequest) GetProjectHooks() string {
+	if x != nil {
+		return x.ProjectHooks
+	}
+	return ""
 }
 
 type SetPRReviewUpdateInPlaceRequest struct {
@@ -18066,7 +18128,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x15RemoveSettingResponse\"\x16\n" +
 	"\x14ListPRReviewsRequest\"E\n" +
 	"\x15ListPRReviewsResponse\x12,\n" +
-	"\areviews\x18\x01 \x03(\v2\x12.orchd.v1.PRReviewR\areviews\"\xf9\x04\n" +
+	"\areviews\x18\x01 \x03(\v2\x12.orchd.v1.PRReviewR\areviews\"\xf4\x05\n" +
 	"\bPRReview\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x12\n" +
 	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x16\n" +
@@ -18096,7 +18158,10 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\bgo_ahead\x18\x14 \x01(\bR\agoAhead\x12\x19\n" +
 	"\bfor_user\x18\x15 \x01(\tR\aforUser\x12\x16\n" +
 	"\x06report\x18\x16 \x01(\tR\x06report\x12&\n" +
-	"\x0fupdate_in_place\x18\x17 \x01(\bR\rupdateInPlace\"\xc2\x02\n" +
+	"\x0fupdate_in_place\x18\x17 \x01(\bR\rupdateInPlace\x12+\n" +
+	"\x11instructions_from\x18\x18 \x01(\tR\x10instructionsFrom\x12'\n" +
+	"\x0fcompare_against\x18\x19 \x01(\tR\x0ecompareAgainst\x12#\n" +
+	"\rproject_hooks\x18\x1a \x01(\tR\fprojectHooks\"\xda\x03\n" +
 	"\x14WatchPRReviewRequest\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x12\n" +
 	"\x04mode\x18\x02 \x01(\tR\x04mode\x12\x1f\n" +
@@ -18107,7 +18172,12 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\finstructions\x18\x06 \x01(\tR\finstructions\x12#\n" +
 	"\rreview_anyway\x18\a \x01(\bR\freviewAnyway\x12-\n" +
 	"\x13set_update_in_place\x18\b \x01(\bR\x10setUpdateInPlace\x12&\n" +
-	"\x0fupdate_in_place\x18\t \x01(\bR\rupdateInPlace\"[\n" +
+	"\x0fupdate_in_place\x18\t \x01(\bR\rupdateInPlace\x12\x1b\n" +
+	"\tset_setup\x18\n" +
+	" \x01(\bR\bsetSetup\x12+\n" +
+	"\x11instructions_from\x18\v \x01(\tR\x10instructionsFrom\x12'\n" +
+	"\x0fcompare_against\x18\f \x01(\tR\x0ecompareAgainst\x12#\n" +
+	"\rproject_hooks\x18\r \x01(\tR\fprojectHooks\"[\n" +
 	"\x1fSetPRReviewUpdateInPlaceRequest\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12&\n" +
 	"\x0fupdate_in_place\x18\x02 \x01(\bR\rupdateInPlace\"?\n" +
