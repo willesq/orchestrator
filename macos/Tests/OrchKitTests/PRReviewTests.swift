@@ -177,6 +177,7 @@ private final class FakeReviews: PRReviewAPI, @unchecked Sendable {
     var error: Error?
     var watched: [(String, PRReviewMode, String?, String?, Bool)] = []
     var updatesInPlace: [Bool?] = []
+    var setups: [PRReviewSetup?] = []
     var settings: [Bool] = []
     var stopped: [(String, Bool)] = []
     var detailCalls = 0
@@ -187,12 +188,13 @@ private final class FakeReviews: PRReviewAPI, @unchecked Sendable {
     }
 
     func watchPRReview(url: String, mode: PRReviewMode, comment: String?, instructions: String?,
-                       reviewAnyway: Bool, updateInPlace: Bool?) async throws -> PRReview {
+                       reviewAnyway: Bool, updateInPlace: Bool?, setup: PRReviewSetup?) async throws -> PRReview {
         if let error { throw error }
         updatesInPlace.append(updateInPlace)
+        setups.append(setup)
         watched.append((url, mode, comment, instructions, reviewAnyway))
         return PRReview(url: url, mode: mode, state: .waiting, comment: comment ?? "", instructions: instructions ?? "",
-                        goAhead: reviewAnyway, updateInPlace: updateInPlace ?? false)
+                        goAhead: reviewAnyway, updateInPlace: updateInPlace ?? false, setup: setup ?? .standard)
     }
 
     func setPRReviewUpdateInPlace(url: String, on: Bool) async throws -> PRReview {
@@ -308,6 +310,11 @@ private final class Counter: @unchecked Sendable {
         let asked = api.watched.count
         #expect(await model.setUpdateInPlace(url1, on: false))
         #expect(api.settings == [false] && api.watched.count == asked && model.reviews.byURL[url1]?.updateInPlace == false)
+        let stacked = PRReviewSetup(instructionsFrom: .base, compareAgainst: .defaultBranch, projectHooks: .off)
+        #expect(await model.watch(url1, mode: .verdict, setup: stacked))
+        #expect(api.setups.last == .some(stacked) && model.reviews.byURL[url1]?.setup == stacked)
+        #expect(await model.watch(url1, mode: .verdict))
+        #expect(api.setups.last == .some(nil))
 
         // Not reviewing: no lookup. Reviewing: the task is followed.
         await model.refreshReviewTask(url1)
@@ -387,6 +394,9 @@ private final class Counter: @unchecked Sendable {
         r.goAhead = true
         r.forUser = "deps fine"
         r.report = "## Review"
+        r.instructionsFrom = "head"
+        r.compareAgainst = "default"
+        r.projectHooks = "on"
         service.prReviews.reviews = [r]
         service.prReview = r
         service.prDetail.url = url1
@@ -422,15 +432,19 @@ private final class Counter: @unchecked Sendable {
             #expect(got.checkedAt == Date(timeIntervalSince1970: 1_800_000_050) && got.instructions == "notes" && got.goAhead)
             #expect(got.forUser == "deps fine" && got.report == "## Review")
             #expect(got.nextCheckAt == Date(timeIntervalSince1970: 1_800_000_170))
+            #expect(got.setup == PRReviewSetup(instructionsFrom: .head, compareAgainst: .defaultBranch, projectHooks: .on))
 
-            _ = try await client.watchPRReview(url: url1, mode: .comment, comment: "edited", instructions: "focus", reviewAnyway: true, updateInPlace: true)
+            let setup = PRReviewSetup(instructionsFrom: .none, compareAgainst: .base, projectHooks: .off)
+            _ = try await client.watchPRReview(url: url1, mode: .comment, comment: "edited", instructions: "focus", reviewAnyway: true,
+                                               updateInPlace: true, setup: setup)
             let sent = try #require(service.recorder.last(Orchd_V1_WatchPRReviewRequest.self))
+            #expect(sent.setSetup && sent.instructionsFrom == "none" && sent.compareAgainst == "base" && sent.projectHooks == "off")
             #expect(sent.url == url1 && sent.mode == "comment" && sent.setComment && sent.comment == "edited")
             #expect(sent.setInstructions && sent.instructions == "focus" && sent.reviewAnyway)
             #expect(sent.setUpdateInPlace && sent.updateInPlace)
-            _ = try await client.watchPRReview(url: url1, mode: .verdict, comment: nil, instructions: nil, reviewAnyway: false, updateInPlace: nil)
+            _ = try await client.watchPRReview(url: url1, mode: .verdict, comment: nil, instructions: nil, reviewAnyway: false, updateInPlace: nil, setup: nil)
             let bare = try #require(service.recorder.last(Orchd_V1_WatchPRReviewRequest.self))
-            #expect(!bare.setComment && !bare.setInstructions && !bare.setUpdateInPlace)
+            #expect(!bare.setComment && !bare.setInstructions && !bare.setUpdateInPlace && !bare.setSetup)
 
             _ = try await client.setPRReviewUpdateInPlace(url: url1, on: true)
             let setting = try #require(service.recorder.last(Orchd_V1_SetPRReviewUpdateInPlaceRequest.self))
