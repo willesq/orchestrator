@@ -63,7 +63,7 @@ func (e *fakeEnv) gh(_ context.Context, args ...string) ([]byte, error) {
 		checks = append(checks, map[string]string{"status": "COMPLETED", "conclusion": c})
 	}
 	return json.Marshal(map[string]any{
-		"state": e.pr.state, "isDraft": e.pr.draft, "headRefOid": e.pr.head, "mergeable": e.pr.mergeable,
+		"state": e.pr.state, "isDraft": e.pr.draft, "headRefOid": e.pr.head, "baseRefOid": shaC, "mergeable": e.pr.mergeable,
 		"statusCheckRollup": checks, "author": map[string]string{"login": e.pr.author},
 	})
 }
@@ -93,7 +93,7 @@ func newEnv(t *testing.T) (*fakeEnv, *Watcher) {
 			e.posts = append(e.posts, posted{event, commit, body})
 			return e.postErr
 		},
-		Dispatch: func(_ context.Context, _, body string) (string, error) {
+		Dispatch: func(_ context.Context, _, body string, _ Checkout) (string, error) {
 			if e.dispatchErr != nil {
 				return "", e.dispatchErr
 			}
@@ -648,7 +648,7 @@ func TestApproveNeedsCIForUntrustedAuthors(t *testing.T) {
 	e, w := newEnv(t)
 	ctx := context.Background()
 	e.pr.checks, e.pr.assoc = nil, "FIRST_TIME_CONTRIBUTOR"
-	_, _ = w.WatchOpts(ctx, testURL, ModeApprove, nil, nil, true, nil)
+	_, _ = w.WatchOpts(ctx, testURL, ModeApprove, nil, nil, true, nil, nil)
 	w.Tick(ctx)
 	finish(t, w, e, "task-1", VerdictApprove, "ok")
 	w.Tick(ctx)
@@ -811,7 +811,7 @@ func TestUntrustedAuthorIsHeldUntilGoAhead(t *testing.T) {
 		t.Fatal("ran without a go-ahead")
 	}
 	// The go-ahead covers one review.
-	_, _ = w.WatchOpts(ctx, testURL, ModeVerdict, nil, nil, true, nil)
+	_, _ = w.WatchOpts(ctx, testURL, ModeVerdict, nil, nil, true, nil, nil)
 	w.Tick(ctx)
 	if r := get(t, w); len(e.dispatched) != 1 || r.GoAhead || r.State != StateReviewing {
 		t.Fatalf("go-ahead: %+v", r)
@@ -1179,7 +1179,7 @@ func TestReviewCancelledWhenHeadMoves(t *testing.T) {
 func watchInPlace(t *testing.T, w *Watcher, mode string) {
 	t.Helper()
 	on := true
-	if _, err := w.WatchOpts(context.Background(), testURL, mode, nil, nil, false, &on); err != nil {
+	if _, err := w.WatchOpts(context.Background(), testURL, mode, nil, nil, false, &on, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1189,7 +1189,7 @@ func TestUpdateInPlaceChoosesHowCommentsPost(t *testing.T) {
 	run := func(t *testing.T, inPlace bool) *fakeEnv {
 		t.Helper()
 		e, w := newEnv(t)
-		_, err := w.WatchOpts(ctx, testURL, ModeFeedback, nil, nil, false, &inPlace)
+		_, err := w.WatchOpts(ctx, testURL, ModeFeedback, nil, nil, false, &inPlace, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1245,7 +1245,7 @@ func TestUpdateInPlaceChoosesHowCommentsPost(t *testing.T) {
 			t.Fatalf("not kept: %+v", r)
 		}
 		off := false
-		_, _ = w.WatchOpts(ctx, testURL, ModeAuto, nil, nil, false, &off)
+		_, _ = w.WatchOpts(ctx, testURL, ModeAuto, nil, nil, false, &off, nil)
 		if r := get(t, w); r.UpdateInPlace {
 			t.Fatalf("not turned off: %+v", r)
 		}

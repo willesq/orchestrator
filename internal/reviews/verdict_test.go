@@ -96,7 +96,7 @@ func TestParseVerdictCaps(t *testing.T) {
 }
 
 func TestPrompt(t *testing.T) {
-	p := Prompt("https://github.com/a/b/pull/3", "a/b", 3, "abc", testNonce, "1 passed, 2 skipped, 0 failed", "focus on rounding")
+	p := Prompt("https://github.com/a/b/pull/3", "a/b", 3, "abc", testNonce, "1 passed, 2 skipped, 0 failed", "focus on rounding", nil)
 	if !strings.Contains(p, "CI when this review started: 1 passed, 2 skipped, 0 failed.") {
 		t.Errorf("prompt lacks the check counts: %s", p)
 	}

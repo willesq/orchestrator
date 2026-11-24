@@ -293,7 +293,7 @@ func TestChangingARunningWatchKeepsItsLimit(t *testing.T) {
 	changes := []func() (Review, error){
 		func() (Review, error) { return w.Watch(ctx, testURL, ModeAuto, nil) },
 		func() (Review, error) { return w.WatchWith(ctx, testURL, ModeAuto, nil, &notes) },
-		func() (Review, error) { return w.WatchOpts(ctx, testURL, ModeAuto, nil, nil, true, &on) },
+		func() (Review, error) { return w.WatchOpts(ctx, testURL, ModeAuto, nil, nil, true, &on, nil) },
 		func() (Review, error) { return w.SetUpdateInPlace(ctx, testURL, false) },
 	}
 	for i, change := range changes {
@@ -331,7 +331,7 @@ func TestGoAheadDoesNotCarryIntoANewWatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e, w := newEnv(t)
 			e.pr.draft = true
-			if _, err := w.WatchOpts(ctx, testURL, ModeVerdict, nil, nil, true, nil); err != nil {
+			if _, err := w.WatchOpts(ctx, testURL, ModeVerdict, nil, nil, true, nil, nil); err != nil {
 				t.Fatal(err)
 			}
 			e.clock = e.clock.Add(MaxWatch + time.Second)
@@ -339,7 +339,7 @@ func TestGoAheadDoesNotCarryIntoANewWatch(t *testing.T) {
 			if r := get(t, w); r.State != StateStopped || !r.GoAhead {
 				t.Fatalf("expired = %+v", r)
 			}
-			r, err := w.WatchOpts(ctx, testURL, ModeVerdict, nil, nil, tt.give, nil)
+			r, err := w.WatchOpts(ctx, testURL, ModeVerdict, nil, nil, tt.give, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

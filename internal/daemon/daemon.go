@@ -840,6 +840,7 @@ func Run(ctx context.Context) error {
 	ghService.Accounts = ghp
 	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ctl, ghService, ghp)
 	reviewWatcher.Poll = reviewsPoll(s.PRReviews.PollInterval)
+	reviewWatcher.Workspaces = newReviewCheckouts(ghp)
 
 	docsSched := newDocsScheduler(s, store, svc, sp, ghp, placer)
 	settingsSvc := settingsFor(store)

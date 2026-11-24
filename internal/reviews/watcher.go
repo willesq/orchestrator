@@ -28,9 +28,17 @@ const maxWatchDays = 14
 // watch the PR again, so a forgotten PR does not keep polling and reviewing.
 const MaxWatch = maxWatchDays * 24 * time.Hour
 
-// Dispatcher queues a review task of repo's PR ("owner/name") with body and
-// returns its ID. The repo decides the space the task reads (SP-026).
-type Dispatcher func(ctx context.Context, repo, body string) (string, error)
+// Dispatcher queues a review task of repo's PR ("owner/name") with body, to
+// run in co, and returns its ID. The repo decides the space the task reads
+// (SP-026).
+type Dispatcher func(ctx context.Context, repo, body string, co Checkout) (string, error)
+
+// Workspaces prepares the checkouts a review runs in and removes those no
+// review needs any more.
+type Workspaces interface {
+	Prepare(ctx context.Context, spec CheckoutSpec) (Checkout, error)
+	Sweep(ctx context.Context, keep map[string]bool)
+}
 
 // TaskLookup reads a task's status and result from the dispatch ledger.
 type TaskLookup func(ctx context.Context, id string) (status, result string, found bool, err error)
@@ -54,6 +62,12 @@ type Watcher struct {
 	Post     Poster
 	Dispatch Dispatcher
 	Task     TaskLookup
+	// Workspaces prepares each review's checkouts; nil runs reviews in a
+	// scratch directory with no checkout.
+	Workspaces Workspaces
+	// HooksDefault reports whether a review of owner's repo runs the repo's
+	// hooks and MCP servers when the PR leaves that automatic; nil means never.
+	HooksDefault func(ctx context.Context, owner string) bool
 	// Cancel stops a review task with reason as its result; nil leaves a
 	// review whose PR moved on to finish, unposted.
 	Cancel TaskCanceller
@@ -110,15 +124,22 @@ func (w *Watcher) Watch(ctx context.Context, url, mode string, comment *string) 
 // reviews; nil keeps them. New notes on a PR that has a verdict or a failed
 // review review its current commit again with them.
 func (w *Watcher) WatchWith(ctx context.Context, url, mode string, comment, instructions *string) (Review, error) {
-	return w.WatchOpts(ctx, url, mode, comment, instructions, false, nil)
+	return w.WatchOpts(ctx, url, mode, comment, instructions, false, nil, nil)
 }
 
 // WatchOpts is WatchWith that can also set whether later comments edit orch's
-// earlier one, and give the go-ahead to review the next
-// ready commit although its author is not trusted.
-func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, instructions *string, goAhead bool, updateInPlace *bool) (Review, error) {
+// earlier one, give the go-ahead to review the next ready commit although its
+// author is not trusted, and set how its reviews are set up (nil keeps it). A
+// new setup on a PR that has a verdict or a failed review reviews its current
+// commit again with it.
+func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, instructions *string, goAhead bool, updateInPlace *bool, setup *Setup) (Review, error) {
 	if !ValidMode(mode) {
 		return Review{}, fmt.Errorf("mode must be %s, %s, %s, %s or %s", ModeVerdict, ModeApprove, ModeComment, ModeFeedback, ModeAuto)
+	}
+	if setup != nil {
+		if err := setup.Validate(); err != nil {
+			return Review{}, err
+		}
 	}
 	repo, number, err := ParseURL(url)
 	if err != nil {
@@ -173,6 +194,17 @@ func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, inst
 			r.State, r.HeadSHA = StateWaiting, ""
 		}
 		r.Instructions = next
+	}
+	if setup != nil {
+		next := setup.Normalized()
+		if next != r.Setup.Normalized() {
+			log.Printf("pr-reviews: %s reviews now take instructions from %s, compare against %s, project hooks %q",
+				url, next.InstructionsFrom, next.CompareAgainst, next.ProjectHooks)
+			if (r.State == StateVerdict || r.State == StateFailed || r.Verdict != "") && r.State != StateReviewing {
+				r.State, r.HeadSHA = StateWaiting, ""
+			}
+		}
+		r.Setup = next
 	}
 	r.Note = ""
 	if err := w.Store.Put(ctx, &r); err != nil {
@@ -243,6 +275,9 @@ func (w *Watcher) Tick(ctx context.Context) {
 	if err != nil {
 		log.Printf("pr-reviews: list: %v", err)
 		return
+	}
+	if w.Workspaces != nil {
+		w.Workspaces.Sweep(ctx, w.liveWorkspaces(ctx, list))
 	}
 	for _, r := range list {
 		if ctx.Err() != nil {
@@ -353,6 +388,8 @@ func (w *Watcher) collect(ctx context.Context, url string) {
 		// Settled for this head either way, so a broken review is not rerun
 		// on its own; a new commit or the user asking again retries.
 		r.HeadSHA, r.PendingSHA = r.PendingSHA, ""
+		// The task is done with its checkout; the next sweep removes it.
+		r.Workspace = ""
 		if failure != "" {
 			r.State, r.Note = StateFailed, failure
 			r.Verdict, r.Reason, r.Comment, r.ForUser, r.Report, r.Posted = "", "", "", "", "", ""
@@ -371,6 +408,68 @@ func (w *Watcher) collect(ctx context.Context, url string) {
 	w.mu.Lock()
 	w.markDue(url)
 	w.mu.Unlock()
+}
+
+// liveWorkspaces are the checkouts of review tasks that may still run or
+// resume: a review under way, or a stopped watch whose task is still going.
+func (w *Watcher) liveWorkspaces(ctx context.Context, list []Review) map[string]bool {
+	keep := map[string]bool{}
+	for _, r := range list {
+		if r.Workspace == "" {
+			continue
+		}
+		if r.State == StateReviewing {
+			keep[r.Workspace] = true
+			continue
+		}
+		status, _, found, err := w.Task(ctx, r.TaskID)
+		// An unreadable ledger keeps it: a later sweep can still remove it.
+		if err != nil || (found && (status == taskPending || status == taskRunning)) {
+			keep[r.Workspace] = true
+		}
+	}
+	return keep
+}
+
+// prepare makes the checkout for reviewing st.Head when check is about to
+// start that review, and returns the setup it was made for. Both are empty
+// when no review starts or Workspaces is nil; note says why the checkout
+// could not be made.
+func (w *Watcher) prepare(ctx context.Context, url string, st Status) (co *Checkout, setup Setup, note string) {
+	if w.Workspaces == nil || !st.Ready() {
+		return nil, Setup{}, ""
+	}
+	w.mu.Lock()
+	r, found, err := w.Store.Get(ctx, url)
+	w.mu.Unlock()
+	if err != nil || !found || !r.Active() || r.State == StateReviewing || w.pastLimit(r) ||
+		st.Head == r.HeadSHA || (!st.Trusted() && !r.GoAhead) {
+		return nil, Setup{}, ""
+	}
+	setup = r.Setup.Normalized()
+	spec := CheckoutSpec{Repo: r.Repo, Head: st.Head, Base: st.Base, From: setup.InstructionsFrom, Compare: setup.CompareAgainst}
+	headNote := ""
+	if spec.From == FromHead && !st.Trusted() {
+		// A go-ahead lets the PR's code be read and run, not its author
+		// decide what the reviewer is told or runs.
+		spec.From = FromDefault
+		headNote = "the user chose the PR head's project instructions, but its author is not a member or collaborator, so the default branch's were used"
+	}
+	switch setup.ProjectHooks {
+	case HooksOn:
+		spec.Hooks = true
+	case HooksAuto:
+		// Automatic trusts what the repo merged, never a branch nobody has
+		// reviewed yet: settings from the PR's base or head need an explicit on.
+		owner, _, _ := strings.Cut(r.Repo, "/")
+		spec.Hooks = spec.From == FromDefault && w.HooksDefault != nil && w.HooksDefault(ctx, owner)
+	}
+	c, err := w.Workspaces.Prepare(ctx, spec)
+	if err != nil {
+		return nil, setup, "could not prepare the review's checkout: " + github.Printable(err.Error(), 300)
+	}
+	c.Note = headNote
+	return &c, setup, ""
 }
 
 // ownerRefused re-checks the org binding of url's owner and says why the
@@ -423,6 +522,8 @@ func (w *Watcher) check(ctx context.Context, url string) {
 	if w.Login != nil {
 		me, _ = w.Login(ctx)
 	}
+	// Made before taking the lock: it fetches from GitHub.
+	co, coSetup, coNote := w.prepare(ctx, url, st)
 	var post *posting
 	w.update(ctx, url, func(r *Review) bool {
 		if st.State != "OPEN" {
@@ -454,13 +555,28 @@ func (w *Watcher) check(ctx context.Context, url string) {
 				r.Note = "held: the author is not a member or collaborator, so orch does not run their code until you choose Review anyway"
 				return true
 			}
+			if w.Workspaces != nil && coNote != "" {
+				r.State, r.Note = StateWaiting, coNote
+				return true
+			}
+			if w.Workspaces != nil && (co == nil || coSetup != r.Setup.Normalized()) {
+				// The review changed since its workspace was made; the next
+				// check makes one for it as it is now.
+				w.markDue(url)
+				return false
+			}
+			var run Checkout
+			if co != nil {
+				run = *co
+			}
 			nonce := NewNonce()
-			id, err := w.Dispatch(ctx, r.Repo, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, st.promptChecks(), r.Instructions))
+			id, err := w.Dispatch(ctx, r.Repo, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, st.promptChecks(), r.Instructions, co), run)
 			if err != nil {
 				r.State, r.Note = StateWaiting, "could not start the review: "+github.Printable(err.Error(), 300)
 				return true
 			}
 			r.State, r.TaskID, r.PendingSHA, r.Nonce, r.Note, r.GoAhead = StateReviewing, id, st.Head, nonce, "", false
+			r.Workspace = run.Dir
 			return true
 		}
 		changed := false
