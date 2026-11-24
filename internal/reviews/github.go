@@ -15,6 +15,7 @@ type Status struct {
 	State     string // OPEN | MERGED | CLOSED
 	IsDraft   bool
 	Head      string // head commit SHA
+	Base      string // base commit SHA: the tip of the branch the PR merges into
 	Mergeable string // MERGEABLE | CONFLICTING | UNKNOWN
 	CI        string // none | failure | pending | success
 	Checks    string // synopsis, such as "3 passed, 1 skipped, 0 failed"
@@ -93,7 +94,7 @@ func sha(s string) bool {
 
 // FetchStatus reads a PR's readiness with one gh call.
 func FetchStatus(ctx context.Context, gh github.Runner, url string) (Status, error) {
-	out, err := gh(ctx, "pr", "view", url, "--json", "state,isDraft,headRefOid,mergeable,statusCheckRollup,author")
+	out, err := gh(ctx, "pr", "view", url, "--json", "state,isDraft,headRefOid,baseRefOid,mergeable,statusCheckRollup,author")
 	if err != nil {
 		return Status{}, err
 	}
@@ -101,6 +102,7 @@ func FetchStatus(ctx context.Context, gh github.Runner, url string) (Status, err
 		State             string      `json:"state"`
 		IsDraft           bool        `json:"isDraft"`
 		HeadRefOid        string      `json:"headRefOid"`
+		BaseRefOid        string      `json:"baseRefOid"`
 		Mergeable         string      `json:"mergeable"`
 		StatusCheckRollup []prs.Check `json:"statusCheckRollup"`
 		Author            struct {
@@ -113,7 +115,7 @@ func FetchStatus(ctx context.Context, gh github.Runner, url string) (Status, err
 	if !sha(v.HeadRefOid) {
 		return Status{}, fmt.Errorf("gh pr view gave no head commit")
 	}
-	st := Status{State: v.State, IsDraft: v.IsDraft, Head: v.HeadRefOid, Mergeable: v.Mergeable,
+	st := Status{State: v.State, IsDraft: v.IsDraft, Head: v.HeadRefOid, Base: v.BaseRefOid, Mergeable: v.Mergeable,
 		CI: prs.RollupCI(v.StatusCheckRollup), Checks: prs.CountChecks(v.StatusCheckRollup).String(), ReplacedFailures: prs.ReplacedFailures(v.StatusCheckRollup),
 		Author: v.Author.Login}
 	// gh pr view has no author association, so the REST API supplies it, and
