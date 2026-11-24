@@ -64,7 +64,7 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `sessions list [--all]` | pinned claude and codex sessions with harness, session, PID, space, pinned directory, state (`active`, `idle`, `ended`, `unpinned`), last activity, tool events and refusals; ended ones only with `--all`; running harness processes with no pin as `unpinned`, with the tool events their own command log chain holds (with `--all` also those of unpinned processes since exited). Outside any agent session every session is shown, inside one only that session's row ([session liveness](daemon.md#session-liveness), `ListSessions`) |
 | `settings list [--provider] [--kind] [--json]`, `settings enable\|disable <kind> <id> [--provider]` | managed Claude Code hooks, permissions and plugins and cc-safety-net rules: list with state and origin, turn one on or off (enable/disable *operator-only*; [settings.md](settings.md)) |
 | `prs [--blocked\|--ready\|--needs-me] [--json]` | cached status of PRs in your enabled GitHub scopes (never calls `gh`); `--needs-me` lists what needs you, most urgent first |
-| `prs watches` | the PRs orchd watches for review: state, what each may post, verdict and note, including why a watch ended (merged or closed, or the 14-day limit) (`ListPRReviews`) |
+| `prs watches` | the PRs orchd watches for review: state, what each may post, verdict and note, including why a watch ended (merged or closed, or the 14-day limit), and the review setup when it is not the default (`ListPRReviews`) |
 | `prs stop <pr-url> [--forget]` | stop watching a PR, or also delete its verdict (`StopPRReview`); says how to cancel a review still running (*operator-only*) |
 
 Every Spaces pane action in Orch.app has a CLI equivalent above (SP-055):

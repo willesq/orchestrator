@@ -540,6 +540,73 @@ closed by then reads as `closed`. A go-ahead for an untrusted author does not ca
   A ready PR whose head differs from the reviewed one is dispatched to the `pr-verdict` agent,
   unrouted so it runs on Claude Code, which it needs for its subagents. A queue that is full leaves
   it waiting, with the reason in `note`.
+- **Review checkouts.** Before dispatching, orchd checks the PR out itself
+  (`reviews.Checkouts`), so the reviewer starts with the repo's project instructions, skills and
+  agents rather than in an empty scratch directory. It is done before the watcher's lock is taken,
+  since it fetches from GitHub.
+  - Each repo has a bare cache at `<data dir>/review-checkouts/repos/<owner>/<name>.git`, fetched
+    with plain git and `gh auth git-credential`, as the PR owner's gh profile, as the only
+    credential helper. One fetch takes the default branch (named by `git ls-remote --symref`) and
+    the PR's base and head commits by SHA. The cache holds full history of those refs only. The
+    user's own clones are never touched. Before each fetch, a cache whose git config holds anything
+    orchd did not write (a proxy, an include, another URL) is made again, since the session runs as
+    the user and could otherwise steer orchd's credentialed fetch.
+  - Each review gets `review-checkouts/work/<id>/` with two detached checkouts: `head/` (the commit
+    under review) and, unless the setup says none, `setup/` (where the project setup comes from).
+    Each is its own `git clone --shared` of the cache, so it borrows the cache's objects but keeps
+    its own config, refs and hooks: git the review session runs cannot change the cache orchd
+    fetches with credentials. orchd's git runs, and the clones keep, `core.hooksPath=/dev/null`,
+    `core.fsmonitor=false`, `core.symlinks=false` (a symlink is checked out as a plain file, so
+    repo content can't point outside its checkout), LFS smudging off and `gc.auto=0`, with
+    `GIT_NO_REPLACE_OBJECTS=1`.
+    The session runs in `setup/`, or in an empty `session/` when there is none, so the repo's
+    `CLAUDE.md` with its imports, nested `CLAUDE.md` files, skills and agents load as they would
+    for the user.
+  - The head checkout is never the session's working directory or under it, and never passed with
+    `--add-dir`: Claude Code loads `CLAUDE.md` files and skills from all of those. A PR's own
+    instructions are therefore never loaded unless the user chose them.
+  - In `-p` mode Claude Code runs a project's hooks and `.mcp.json` servers with no trust prompt.
+    With project settings off, orchd deletes `.claude/settings.json`,
+    `.claude/settings.local.json` and `.mcp.json` from `setup/` before the session starts, plus
+    any agent, skill or command whose frontmatter has a key outside a short allowlist (`name`,
+    `description`, `model`, `tools`, `disallowedTools`, `color`, `argument-hint`, `license`,
+    `version`), so `hooks`, `permissionMode`, `mcpServers` and `allowed-tools` all go. The
+    repo's hooks, MCP servers, plugins and permission rules then don't apply; its instructions,
+    skills and agents still do. `--add-dir` would skip settings too, but Claude Code does not
+    follow `@` imports in an added directory's `CLAUDE.md`, and many repos keep their instructions
+    in an imported `AGENTS.md`.
+  - Whatever the settings, a project agent named like one the review runs as
+    (`pr-verdict`, `adversarial-reviewer`, `adversarial-qa`, `exploit-finder`, by its `name` or
+    file name, in any case) is deleted: Claude Code prefers a project agent to the user's, so the
+    repo could otherwise replace its reviewer and write its verdict. Frontmatter is parsed as YAML
+    (the first 64 KB of each file), and a file whose frontmatter does not close or parse is deleted
+    too, since what Claude Code would make of it cannot be known. All of this goes through `os.OpenRoot`,
+    so nothing outside the checkout can be removed. A repo whose instructions live only in `AGENTS.md` still loads them (Claude Code
+    reads `AGENTS.md` when no `CLAUDE.md` exists); one with both should import `AGENTS.md` from
+    `CLAUDE.md` with `@AGENTS.md`.
+  - The prompt names the head checkout, the commit to diff against (`git diff <commit>...HEAD`)
+    and where the setup came from, and asks for repo-relative paths so posted text never carries
+    the local one. A checkout that cannot be made leaves the PR `waiting` with the
+    reason, and the next check tries again; the review never falls back to cloning on its own.
+  - Every tick sweeps `work/`: a checkout stays while its row is `reviewing` or its task is still
+    pending or running (a stopped watch's task runs on), so an interrupted task resumes in it.
+    Anything else is removed, and the caches prune their worktree records.
+- **Review setup** is per PR (`WatchPRReview` `set_setup`), changed in the app's review card:
+  - `instructions_from`: `default` (the default branch's tip, the default), `base` (the PR's base
+    branch, which for a stacked PR is unreviewed), `head` (the PR's own commit), or `none`. `head`
+    applies only to authors who are the repo's owner, members or collaborators. For anyone else,
+    even with a go-ahead, the default branch is used and the reason says so: a go-ahead lets the
+    PR's code run, not its author steer the reviewer.
+  - `compare_against`: `base` (the PR's own changes, the default) or `default` (everything it would
+    bring to the default branch, its stack included).
+  - `project_hooks`: whether the repo's Claude Code settings (hooks, MCP servers, plugins,
+    permissions) apply. `""` is automatic: on when the instructions come from the default branch
+    and the owner is the user's own login or bound to one of their spaces; off for quarantined or
+    unknown owners, and always off for instructions from the PR's base or head, which need an
+    explicit `on`. The others are `on` and `off`.
+  - The app asks before a change that widens what unreviewed content can do (instructions from
+    `base` or `head`, hooks `on`). A new setup on a PR with a verdict reviews its current commit
+    again, as new notes do.
 - **Posting** happens only for a `verdict` row whose head is still the PR's head, and at most once
   per head; a failed post is recorded and not retried until the user changes the watch.
   - The PR's head is read again right before each post. A head that moved marks the verdict
@@ -564,8 +631,9 @@ closed by then reads as `closed`. A go-ahead for an untrusted author does not ca
 review plus the adversarial fan-out (`adversarial-reviewer`, `adversarial-qa`, then
 `exploit-finder` when findings could chain). Its prompt holds only orch-built values (URL, repo,
 number, head); it reads the PR's text from GitHub as untrusted data. The runner denies it every `gh`
-command that changes GitHub, `gh api`, `gh auth`, `git push`, `git -C`, `curl`, `wget`, `sqlite3`
-and WebFetch (`agentrun.readOnlyAgents`). Permission patterns match what the agent types, not what
+command that changes GitHub, `gh api`, `gh auth`, `git push`, `git -C`, `git worktree`, `curl`,
+`wget`, `sqlite3` and WebFetch (`agentrun.readOnlyAgents`), and does not verify or "fix" its work
+after it finishes. Permission patterns match what the agent types, not what
 the programs it starts do. The runtime fuzz runs the PR's code with the user's credentials, and
 that code could reach GitHub or orch.db itself. So the patterns are a guard, not a sandbox, and
 untrusted authors' PRs are held for the user. Running reviews under a separate read-only GitHub
